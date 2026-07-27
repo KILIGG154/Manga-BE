@@ -39,8 +39,8 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
     @Transactional
     public ProjectResponse createProject(CreateProjectRequest req, Long editorId) {
         Account creator = getAccount(editorId);
-        if (!creator.hasRole(SystemRoleName.EDITORIAL_BOARD_MEMBER)) {
-            throw new AccessDeniedException("Only EDITORIAL_BOARD_MEMBER can create projects");
+        if (!creator.hasRole(SystemRoleName.EDITORIAL_BOARD_MEMBER) && !creator.hasRole(SystemRoleName.LEADER_BOARD)) {
+            throw new AccessDeniedException("Only EDITORIAL_BOARD_MEMBER or LEADER_BOARD can create projects");
         }
 
         Account tantou = getAccount(req.getTantouId());

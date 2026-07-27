@@ -27,7 +27,7 @@ public class ProductionWorkflowController {
     // --- Project & Plan Management ---
 
     @PostMapping("/projects")
-    @Operation(summary = "Create a new project and assign Tantou (Editorial Board only)")
+    @Operation(summary = "Create a new project and assign Tantou (Editorial/Leader Board only)")
     public ResponseEntity<ResponseBase> createProject(@Valid @RequestBody CreateProjectRequest req,
             @RequestParam Long editorId) {
         try {
