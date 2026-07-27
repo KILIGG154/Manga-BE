@@ -95,8 +95,8 @@ public class AccountController {
         return ResponseEntity.ok(new ResponseBase(200, "Account request approved", account));
     }
 
-    @GetMapping("/admin/accounts")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @GetMapping("/accounts")
+//    @PreAuthorize("hasAuthority('ADMIN')")
     public ResponseEntity<ResponseBase> getAllAccounts() {
         List<Account> accounts = accountService.getAllAccounts();
         return ResponseEntity.ok(new ResponseBase(200, "Accounts retrieved", accounts));
