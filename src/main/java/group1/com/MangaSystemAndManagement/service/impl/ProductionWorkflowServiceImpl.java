@@ -53,10 +53,11 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         project.setGenre(req.getGenre());
         project.setTargetAudience(req.getTargetAudience());
         project.setFormat(req.getFormat());
-        project.setProjectWorkflowStatus(ProjectWorkflowStatus.DRAFT);
+        project.setProjectWorkflowStatus(ProjectWorkflowStatus.ACTIVE); // Auto active
         project.setOwner(tantou); // Tantou is assigned as the owner of the project
 
         project = projectRepository.save(project);
+
         return mapToProjectResponse(project);
     }
 
