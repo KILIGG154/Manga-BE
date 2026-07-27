@@ -74,18 +74,15 @@ public class Submission {
     private String title;
 
     @Nationalized
-    @Lob
-    @Column(name = "Story")
+    @Column(name = "Story", columnDefinition = "nvarchar(max)")
     private String story;
 
     @Nationalized
-    @Lob
-    @Column(name = "CharacterDescription")
+    @Column(name = "CharacterDescription", columnDefinition = "nvarchar(max)")
     private String characterDescription;
 
     @Nationalized
-    @Lob
-    @Column(name = "WorldSetting")
+    @Column(name = "WorldSetting", columnDefinition = "nvarchar(max)")
     private String worldSetting;
 
     /** Free-form text content/notes (was the only audit field in the legacy schema). */
@@ -95,8 +92,12 @@ public class Submission {
     private String contentUrl;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "Status", length = 50)
-    private SubmissionStatus status;
+    @Column(name = "name_status", length = 50)
+    private NameSubmissionStatus nameStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "production_status", length = 50)
+    private ProductionSubmissionStatus productionStatus;
 
     /** Workflow classifier – see {@link SubmissionType}. */
     @Enumerated(EnumType.STRING)
@@ -123,4 +124,7 @@ public class Submission {
 
     @OneToMany(mappedBy = "submission", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SubmissionFile> files;
+
+    @OneToMany(mappedBy = "submission", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Feedback> feedbacks;
 }

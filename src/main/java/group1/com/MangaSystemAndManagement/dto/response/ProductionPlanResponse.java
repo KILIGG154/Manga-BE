@@ -25,7 +25,7 @@ public class ProductionPlanResponse {
     private String assistantAllocation;
     private String priority;
     private String risk;
-    private String approvalStatus;
+    // Decision Log 2026-07-27 §AI-10: approvalStatus field removed from ProductionPlan entity.
     private LocalDate startDate;
     private LocalDate endDate;
     private Integer totalVolumeTarget;
@@ -49,7 +49,6 @@ public class ProductionPlanResponse {
         r.assistantAllocation = pp.getAssistantAllocation();
         r.priority = pp.getPriority();
         r.risk = pp.getRisk();
-        r.approvalStatus = pp.getApprovalStatus();
         r.startDate = pp.getStartDate();
         r.endDate = pp.getEndDate();
         r.totalVolumeTarget = pp.getTotalVolumeTarget();

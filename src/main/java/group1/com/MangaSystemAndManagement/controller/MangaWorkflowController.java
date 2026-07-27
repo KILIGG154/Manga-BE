@@ -97,6 +97,28 @@ public class MangaWorkflowController {
         }
     }
 
+    @PostMapping("/name/{id}/request-revision")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Leader Board requests revision for a submission")
+    public ResponseEntity<ResponseBase> requestRevision(
+            @PathVariable Long id,
+            @RequestParam Long leaderId,
+            @RequestParam String comment) {
+        try {
+            Submission updated = workflowService.requestRevision(id, leaderId, comment);
+            return ResponseEntity.status(200).body(new ResponseBase(200, "Revision requested successfully", updated));
+        } catch (AccessDeniedException ad) {
+            return ResponseEntity.status(403).body(new ResponseBase(403, ad.getMessage(), null));
+        } catch (RuntimeException re) {
+            String msg = re.getMessage() == null ? "" : re.getMessage();
+            if (msg.toLowerCase().contains("not found")) {
+                return ResponseEntity.status(404).body(new ResponseBase(404, msg, null));
+            }
+            return ResponseEntity.status(400).body(new ResponseBase(400, msg, null));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
+
     @GetMapping("/name/submissions")
     public ResponseEntity<ResponseBase> listSubmissions(@RequestParam(required = false) String status) {
         try {

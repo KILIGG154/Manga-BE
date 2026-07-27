@@ -22,6 +22,7 @@ public class ChapterResponse {
     private Long projectId;
     private Long ownerId;
     private String ownerName;
+    private String releaseNote;
     private List<TaskResponse> tasks;
 
     public static ChapterResponse from(Chapter c) {
@@ -32,6 +33,7 @@ public class ChapterResponse {
         r.targetPageCount = c.getTargetPageCount();
         r.publishDate = c.getPublishDate();
         r.chapterStatus = c.getChapterStatus();
+        r.releaseNote = c.getReleaseNote();
         if (c.getProject() != null) r.projectId = c.getProject().getId();
         if (c.getOwner() != null) {
             r.ownerId = c.getOwner().getId();

@@ -43,8 +43,7 @@ public class SubmissionReview {
     private String decision;
 
     @Nationalized
-    @Lob
-    @Column(name = "Comment")
+    @Column(name = "Comment", columnDefinition = "nvarchar(max)")
     private String comment;
 
     @ColumnDefault("getdate()")

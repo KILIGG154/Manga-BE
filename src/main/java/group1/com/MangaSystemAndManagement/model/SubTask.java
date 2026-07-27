@@ -43,13 +43,8 @@ public class SubTask {
     @Column(name = "title", length = 255)
     private String title;
 
-    @Lob
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "nvarchar(max)")
     private String description;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "production_task_type", length = 50)
-    private TaskType productionTaskType;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "subtask_status", length = 50, nullable = false)

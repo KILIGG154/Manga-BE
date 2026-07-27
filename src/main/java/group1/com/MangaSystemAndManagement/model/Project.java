@@ -1,6 +1,7 @@
 package group1.com.MangaSystemAndManagement.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -15,6 +16,7 @@ import java.time.Instant;
 @Setter
 @Entity
 @Table(name = "Project")
+@JsonIgnoreProperties({"productionPlan"})
 public class Project {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,8 +30,7 @@ public class Project {
     private String title;
 
     @Nationalized
-    @Lob
-    @Column(name = "Description")
+    @Column(name = "Description", columnDefinition = "nvarchar(max)")
     private String description;
 
     @Size(max = 50)
@@ -90,6 +91,7 @@ public class Project {
     @OneToOne(mappedBy = "project", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private DevelopmentPlan developmentPlan;
 
+    @JsonIgnore
     @OneToOne(mappedBy = "project", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private ProductionPlan productionPlan;
 

@@ -1,5 +1,6 @@
 package group1.com.MangaSystemAndManagement.controller;
 import group1.com.MangaSystemAndManagement.dto.request.AssignTantouRequest;
+import group1.com.MangaSystemAndManagement.dto.request.CancelProjectRequest;
 import group1.com.MangaSystemAndManagement.dto.request.ProjectRequest;
 import group1.com.MangaSystemAndManagement.dto.response.ProjectResponse;
 import group1.com.MangaSystemAndManagement.dto.response.ResponseBase;
@@ -19,7 +20,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ProjectController {
     private final ProjectService service;
+    /**
+     * Create a project manually.
+     * - ADMIN: seeding / emergency use
+     * - EDITORIAL_BOARD_MEMBER: creates the project after approving a Name Submission,
+     *   then assigns a Tantou via POST /{projectId}/tantou
+     */
     @PostMapping
+    @PreAuthorize("hasAuthority('ADMIN') or hasAuthority('EDITORIAL_BOARD_MEMBER')")
     public ResponseEntity<ResponseBase> create(@RequestBody ProjectRequest request) {
         try {
             Project result = service.create(request);
@@ -87,6 +95,32 @@ public class ProjectController {
             return ResponseEntity.status(403).body(new ResponseBase(403, e.getMessage(), null));
         } catch (RuntimeException e) {
             return ResponseEntity.status(409).body(new ResponseBase(409, e.getMessage(), null));
+        }
+    }
+
+    /**
+     * Cancel a Project (BA V3 §2.1). Cascades to Plan; PUBLISHED chapters stay public;
+     * further writes to non-published chapters are blocked.
+     *
+     * Allowed: LEADER_BOARD or EDITORIAL_BOARD_MEMBER.
+     */
+    @PostMapping("/{projectId}/cancel")
+    @PreAuthorize("hasAuthority('LEADER_BOARD') or hasAuthority('EDITORIAL_BOARD_MEMBER')")
+    @Operation(summary = "Cancel a project (Leader or Board)")
+    public ResponseEntity<ResponseBase> cancel(
+            @PathVariable Long projectId,
+            @RequestParam Long requesterId,
+            @Valid @RequestBody CancelProjectRequest request) {
+        try {
+            Project result = service.cancelProject(projectId, requesterId, request.getReason());
+            return ResponseEntity.status(200)
+                    .body(new ResponseBase(200, "Project cancelled", ProjectResponse.from(result)));
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            return ResponseEntity.status(403).body(new ResponseBase(403, e.getMessage(), null));
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return ResponseEntity.status(409).body(new ResponseBase(409, e.getMessage(), null));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
         }
     }
 }

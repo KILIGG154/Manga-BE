@@ -3,6 +3,8 @@ package group1.com.MangaSystemAndManagement.config;
 import group1.com.MangaSystemAndManagement.model.SystemRole;
 import group1.com.MangaSystemAndManagement.model.SystemRoleName;
 import group1.com.MangaSystemAndManagement.model.AccountStatus;
+import group1.com.MangaSystemAndManagement.model.ProductionPlan;
+import group1.com.MangaSystemAndManagement.repository.ProductionPlanRepository;
 import group1.com.MangaSystemAndManagement.repository.SystemRoleRepository;
 import group1.com.MangaSystemAndManagement.service.impl.SystemRoleNormalizationService;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import group1.com.MangaSystemAndManagement.model.Account;
 import group1.com.MangaSystemAndManagement.repository.*;
 import group1.com.MangaSystemAndManagement.model.ProjectRole;
 import jakarta.annotation.Nullable;
+import java.time.Instant;
 import java.util.List;
 
 @Slf4j
@@ -25,6 +28,7 @@ public class DataInitialized implements CommandLineRunner {
     private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
     private final SystemRoleNormalizationService systemRoleNormalizationService;
+    private final ProductionPlanRepository productionPlanRepository;
 
     static final List<SystemRoleName> DEFAULT_ROLES = List.of(SystemRoleName.values());
 
@@ -34,8 +38,17 @@ public class DataInitialized implements CommandLineRunner {
         initRoles();
         initAdminAccount();
         initBoardMembers();
+        initLeaderBoard();
         initWorkflowMembers();
+        // Decision Log 2026-07-27 §AI-10: migratePlanApprovalStatus() removed.
+        // All plans already migrated to PlanStatus in earlier sprints; legacy column dropped.
     }
+
+    /**
+     * Decision Log 2026-07-27 §AI-10: legacy migration removed.
+     * PlanApprovalStatus enum + production_plan.approval_status column were dropped in sprint 8.
+     * See {@code V2026_07_27__drop_production_plan_approval_status_column.sql}.
+     */
 
     private void initRoles() {
         for (SystemRoleName roleName : DEFAULT_ROLES) {
@@ -107,6 +120,31 @@ public class DataInitialized implements CommandLineRunner {
                 accountRepository.save(boardAccount);
                 log.info("Created board member account: {}", email);
             }
+        }
+    }
+
+    private void initLeaderBoard() {
+        List<SystemRole> leaderRoles = systemRoleRepository
+                .findAllByRoleNameIgnoreCase(SystemRoleName.LEADER_BOARD.name());
+        if (leaderRoles.isEmpty()) {
+            log.warn("LEADER_BOARD role not found, skipping leader board creation.");
+            return;
+        }
+        SystemRole leaderRole = leaderRoles.get(0);
+
+        String email = "leader@manga.com";
+        if (accountRepository.findByEmail(email).isEmpty()) {
+            Account leaderAccount = new Account();
+            leaderAccount.setFirstName("Leader");
+            leaderAccount.setLastName("Board");
+            leaderAccount.setPhoneNumber("0987654330");
+            leaderAccount.setEmail(email);
+            leaderAccount.setPassword(passwordEncoder.encode("password123"));
+            leaderAccount.setSystemRole(List.of(leaderRole));
+            leaderAccount.setStatus(AccountStatus.ACTIVE);
+
+            accountRepository.save(leaderAccount);
+            log.info("Created leader board account: {}", email);
         }
     }
 

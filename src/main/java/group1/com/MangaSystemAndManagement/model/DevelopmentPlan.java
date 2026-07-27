@@ -22,23 +22,19 @@ public class DevelopmentPlan {
     private Project project;
 
     @Nationalized
-    @Lob
-    @Column(name = "StoryDirection")
+    @Column(name = "StoryDirection", columnDefinition = "nvarchar(max)")
     private String storyDirection;
 
     @Nationalized
-    @Lob
-    @Column(name = "WorldSetting")
+    @Column(name = "WorldSetting", columnDefinition = "nvarchar(max)")
     private String worldSetting;
 
     @Nationalized
-    @Lob
-    @Column(name = "MainCharacters")
+    @Column(name = "MainCharacters", columnDefinition = "nvarchar(max)")
     private String mainCharacters;
 
     @Nationalized
-    @Lob
-    @Column(name = "ArcPlanning")
+    @Column(name = "ArcPlanning", columnDefinition = "nvarchar(max)")
     private String arcPlanning;
 
     @Column(name = "EstimatedVolumes")
@@ -60,8 +56,7 @@ public class DevelopmentPlan {
     private String businessGoal;
 
     @Nationalized
-    @Lob
-    @Column(name = "Notes")
+    @Column(name = "Notes", columnDefinition = "nvarchar(max)")
     private String notes;
 
     @Nationalized

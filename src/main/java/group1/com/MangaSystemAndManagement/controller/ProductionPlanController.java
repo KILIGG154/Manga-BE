@@ -1,11 +1,14 @@
 package group1.com.MangaSystemAndManagement.controller;
 
+import group1.com.MangaSystemAndManagement.dto.request.ForceClosePlanRequest;
+import group1.com.MangaSystemAndManagement.dto.request.PausePlanRequest;
 import group1.com.MangaSystemAndManagement.dto.request.ProductionPlanRequest;
 import group1.com.MangaSystemAndManagement.dto.response.ProductionPlanResponse;
 import group1.com.MangaSystemAndManagement.dto.response.ResponseBase;
 import group1.com.MangaSystemAndManagement.model.ProductionPlan;
 import group1.com.MangaSystemAndManagement.service.interfaces.ProductionPlanService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,13 +33,75 @@ public class ProductionPlanController {
         }
     }
 
+    /**
+     * Deprecated: BA V3 removed pre-approval. Plan starts in IN_PROGRESS.
+     * Kept for backward-compatibility — still flips status if called.
+     */
+    @Deprecated
     @PostMapping("/production-plans/{id}/approve")
-    public ResponseEntity<ResponseBase> approve(@PathVariable Long id) {
+    public ResponseEntity<ResponseBase> approve(
+            @PathVariable Long id,
+            @RequestParam Long requesterId) {
         try {
-            ProductionPlan result = service.approveProductionPlan(id);
+            ProductionPlan result = service.approveProductionPlan(id, requesterId);
             return ResponseEntity.status(200).body(new ResponseBase(200, "Production plan approved successfully", result));
+        } catch (org.springframework.security.access.AccessDeniedException ad) {
+            return ResponseEntity.status(403).body(new ResponseBase(403, ad.getMessage(), null));
         } catch (Exception e) {
             return ResponseEntity.status(409).body(new ResponseBase(409, e.getMessage(), null));
+        }
+    }
+
+    /** Pause a Plan (BA V3 §2.2). Allowed: TANTOU_EDITOR, LEADER_BOARD, EDITORIAL_BOARD_MEMBER. */
+    @PostMapping("/production-plans/{id}/pause")
+    public ResponseEntity<ResponseBase> pause(
+            @PathVariable Long id,
+            @RequestParam Long requesterId,
+            @Valid @RequestBody PausePlanRequest request) {
+        try {
+            ProductionPlan result = service.pausePlan(id, requesterId, request);
+            return ResponseEntity.ok(new ResponseBase(200, "Production plan paused", result));
+        } catch (org.springframework.security.access.AccessDeniedException ad) {
+            return ResponseEntity.status(403).body(new ResponseBase(403, ad.getMessage(), null));
+        } catch (IllegalStateException ise) {
+            return ResponseEntity.status(409).body(new ResponseBase(409, ise.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
+
+    /** Resume a paused Plan (BA V3 §2.2). Same roles as pause. */
+    @PostMapping("/production-plans/{id}/resume")
+    public ResponseEntity<ResponseBase> resume(
+            @PathVariable Long id,
+            @RequestParam Long requesterId) {
+        try {
+            ProductionPlan result = service.resumePlan(id, requesterId);
+            return ResponseEntity.ok(new ResponseBase(200, "Production plan resumed", result));
+        } catch (org.springframework.security.access.AccessDeniedException ad) {
+            return ResponseEntity.status(403).body(new ResponseBase(403, ad.getMessage(), null));
+        } catch (IllegalStateException ise) {
+            return ResponseEntity.status(409).body(new ResponseBase(409, ise.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
+
+    /** Force-close a Plan (BA V3 §2.1). Allowed: LEADER_BOARD, EDITORIAL_BOARD_MEMBER. */
+    @PostMapping("/production-plans/{id}/force-close")
+    public ResponseEntity<ResponseBase> forceClose(
+            @PathVariable Long id,
+            @RequestParam Long requesterId,
+            @Valid @RequestBody ForceClosePlanRequest request) {
+        try {
+            ProductionPlan result = service.forceClosePlan(id, requesterId, request);
+            return ResponseEntity.ok(new ResponseBase(200, "Production plan force-closed", result));
+        } catch (org.springframework.security.access.AccessDeniedException ad) {
+            return ResponseEntity.status(403).body(new ResponseBase(403, ad.getMessage(), null));
+        } catch (IllegalStateException ise) {
+            return ResponseEntity.status(409).body(new ResponseBase(409, ise.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
         }
     }
 

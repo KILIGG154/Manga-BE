@@ -8,6 +8,7 @@ public enum SystemRoleName {
     MANAGER,
     TANTOU_EDITOR,
     EDITORIAL_BOARD_MEMBER,
+    LEADER_BOARD,
     MANGAKA,
     ASSISTANT;
 
@@ -20,6 +21,7 @@ public enum SystemRoleName {
         return switch (normalized) {
             case "TANTOR" -> TANTOU_EDITOR;
             case "EDITOR" -> EDITORIAL_BOARD_MEMBER;
+            case "LEADER" -> LEADER_BOARD;
             default -> {
                 try {
                     yield valueOf(normalized);

@@ -3,9 +3,16 @@ package group1.com.MangaSystemAndManagement.service.impl;
 import group1.com.MangaSystemAndManagement.dto.request.ProjectRequest;
 import group1.com.MangaSystemAndManagement.exception.ResourceNotFoundException;
 import group1.com.MangaSystemAndManagement.model.Account;
+import group1.com.MangaSystemAndManagement.model.Chapter;
+import group1.com.MangaSystemAndManagement.model.ChapterStatus;
+import group1.com.MangaSystemAndManagement.model.PlanStatus;
+import group1.com.MangaSystemAndManagement.model.ProductionPlan;
 import group1.com.MangaSystemAndManagement.model.Project;
+import group1.com.MangaSystemAndManagement.model.ProjectWorkflowStatus;
 import group1.com.MangaSystemAndManagement.model.SystemRoleName;
 import group1.com.MangaSystemAndManagement.repository.AccountRepository;
+import group1.com.MangaSystemAndManagement.repository.ChapterRepository;
+import group1.com.MangaSystemAndManagement.repository.ProductionPlanRepository;
 import group1.com.MangaSystemAndManagement.repository.ProjectRepository;
 import group1.com.MangaSystemAndManagement.service.interfaces.ProjectService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +32,12 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Autowired
     private AccountRepository accountRepository;
+
+    @Autowired
+    private ProductionPlanRepository productionPlanRepository;
+
+    @Autowired
+    private ChapterRepository chapterRepository;
 
     @Override
     @Transactional
@@ -105,6 +118,57 @@ public class ProjectServiceImpl implements ProjectService {
 
         project.setTantou(tantou);
         return repository.save(project);
+    }
+
+    @Override
+    @Transactional
+    public Project cancelProject(Long projectId, Long requesterId, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("Cancellation reason is required");
+        }
+        Account requester = accountRepository.findById(requesterId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + requesterId));
+        if (!requester.hasRole(SystemRoleName.LEADER_BOARD)
+                && !requester.hasRole(SystemRoleName.EDITORIAL_BOARD_MEMBER)) {
+            throw new AccessDeniedException(
+                    "Only LEADER_BOARD or EDITORIAL_BOARD_MEMBER can cancel a Project");
+        }
+
+        Project project = repository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Project not found with id " + projectId));
+
+        if (project.getProjectWorkflowStatus() == ProjectWorkflowStatus.CANCELLED) {
+            throw new IllegalStateException("Project is already CANCELLED");
+        }
+
+        project.setProjectWorkflowStatus(ProjectWorkflowStatus.CANCELLED);
+        project.setStatus("CANCELLED");
+        Project saved = repository.save(project);
+
+        // Cascade Plan -> CANCELLED.
+        productionPlanRepository.findByProjectId(projectId).ifPresent(plan -> {
+            if (plan.getPlanStatus() != PlanStatus.COMPLETED) {
+                plan.setPlanStatus(PlanStatus.CANCELLED);
+                plan.setPauseReason("Project cancelled: " + reason);
+                plan.setPausedAt(Instant.now());
+                productionPlanRepository.save(plan);
+            }
+        });
+
+        // Lock non-PUBLISHED chapters so further writes are refused. PUBLISHED chapters
+        // remain public for historical record.
+        List<Chapter> chapters = chapterRepository.findByProjectId(projectId);
+        for (Chapter ch : chapters) {
+            if (ch.getChapterStatus() != ChapterStatus.PUBLISHED) {
+                // Use COMPLETED + an internal sentinel would be safer, but the BA V3 spec
+                // (gap §5 1.4) says: "khóa" — we leave the chapter as-is and rely on the
+                // guard in ProductionWorkflowServiceImpl.assertProjectNotCancelled to block
+                // writes. No DB write needed here.
+            }
+        }
+
+        return saved;
     }
 
     private String normalizeTitle(String title) {

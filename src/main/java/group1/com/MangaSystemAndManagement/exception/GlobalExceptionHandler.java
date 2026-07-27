@@ -7,6 +7,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
@@ -37,6 +39,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler({DuplicateEntityException.class, AccountStateConflictException.class})
     public ResponseEntity<ErrorResponse> handleConflict(RuntimeException ex, WebRequest request) {
         return response(HttpStatus.CONFLICT, "INVALID_ACCOUNT_STATE", ex.getMessage(), request, null);
+    }
+
+    /**
+     * BA V3 §3.2: optimistic locking — if a Chapter was updated by another user between
+     * read and write, surface as HTTP 409 with a clear hint to reload the page.
+     */
+    @ExceptionHandler({OptimisticLockingFailureException.class, ObjectOptimisticLockingFailureException.class})
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(RuntimeException ex, WebRequest request) {
+        return response(HttpStatus.CONFLICT, "STALE_ENTITY",
+                "Trạng thái Chapter đã được cập nhật bởi người dùng khác. Vui lòng tải lại trang.",
+                request, null);
     }
 
     @ExceptionHandler({InvalidPublicRoleException.class, IllegalArgumentException.class,

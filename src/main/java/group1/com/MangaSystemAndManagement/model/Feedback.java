@@ -31,9 +31,13 @@ public class Feedback {
     @JsonIgnore
     private Account createdBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "submission_id")
+    @JsonIgnore
+    private Submission submission;
+
     @NotNull
-    @Lob
-    @Column(name = "content", nullable = false)
+    @Column(name = "content", nullable = false, columnDefinition = "nvarchar(max)")
     private String content;
 
     @Column(name = "attachment_url", length = 512)

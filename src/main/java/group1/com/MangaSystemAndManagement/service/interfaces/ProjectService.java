@@ -17,4 +17,17 @@ public interface ProjectService {
      * @return the updated Project
      */
     Project assignTantou(Long projectId, Long tantouId);
+
+    /**
+     * Cancel a Project (BA V3 §2.1). Cascade effects:
+     *  - Project.projectWorkflowStatus = CANCELLED.
+     *  - ProductionPlan.planStatus        = CANCELLED (if any plan exists).
+     *  - Chapter states are locked for editing; PUBLISHED chapters remain public for history.
+     *
+     * Allowed: LEADER_BOARD or EDITORIAL_BOARD_MEMBER.
+     *
+     * @param requesterId account performing the cancellation
+     * @param reason      why the project was cancelled (stored on the plan as a memo)
+     */
+    Project cancelProject(Long projectId, Long requesterId, String reason);
 }

@@ -20,7 +20,6 @@ public class SubTaskResponse {
     private String assigneeName;
     private String title;
     private String description;
-    private TaskType productionTaskType;
     private SubTaskWorkflowStatus subtaskStatus;
     private LocalDate deadlineDate;
     private LocalTime deadlineTime;
@@ -44,7 +43,6 @@ public class SubTaskResponse {
         }
         r.title = st.getTitle();
         r.description = st.getDescription();
-        r.productionTaskType = st.getProductionTaskType();
         r.subtaskStatus = st.getSubtaskStatus();
         r.deadlineDate = st.getDeadlineDate();
         r.deadlineTime = st.getDeadlineTime();

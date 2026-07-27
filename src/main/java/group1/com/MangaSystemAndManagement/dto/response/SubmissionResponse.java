@@ -1,7 +1,8 @@
 package group1.com.MangaSystemAndManagement.dto.response;
 
 import group1.com.MangaSystemAndManagement.model.Submission;
-import group1.com.MangaSystemAndManagement.model.SubmissionStatus;
+import group1.com.MangaSystemAndManagement.model.NameSubmissionStatus;
+import group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus;
 import group1.com.MangaSystemAndManagement.model.SubmissionType;
 import lombok.Getter;
 import lombok.Setter;
@@ -19,7 +20,8 @@ public class SubmissionResponse {
     private Long subTaskId;
     private SubmissionType submissionType;
     private Long parentSubmissionId;
-    private SubmissionStatus status;
+    private NameSubmissionStatus nameStatus;
+    private ProductionSubmissionStatus productionStatus;
     private String note;
     private Long submittedById;
     private String submittedByName;
@@ -37,7 +39,8 @@ public class SubmissionResponse {
         r.subTaskId = s.getSubTask() != null ? s.getSubTask().getId() : null;
         r.submissionType = s.getSubmissionType();
         r.parentSubmissionId = s.getParent() != null ? s.getParent().getId() : null;
-        r.status = s.getStatus();
+        r.nameStatus = s.getNameStatus();
+        r.productionStatus = s.getProductionStatus();
         r.note = s.getContentUrl();
         if (s.getSubmittedBy() != null) {
             r.submittedById = s.getSubmittedBy().getId();

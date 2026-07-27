@@ -100,7 +100,6 @@ public class SubTaskServiceImpl implements SubTaskService {
         sub.setAssignee(assistant);
         sub.setTitle(req.getTitle());
         sub.setDescription(req.getDescription());
-        sub.setProductionTaskType(req.getProductionTaskType());
         sub.setSubtaskStatus(SubTaskWorkflowStatus.TODO);
         sub.setDeadlineDate(req.getDeadlineDate());
         sub.setDeadlineTime(deadlineTime);
@@ -201,7 +200,7 @@ public class SubTaskServiceImpl implements SubTaskService {
                     + sub.getSubtaskStatus() + ")");
         }
 
-        sub.setSubtaskStatus(SubTaskWorkflowStatus.NEEDS_REVISION);
+        sub.setSubtaskStatus(SubTaskWorkflowStatus.FINAL_REJECTED);
         sub = subTaskRepository.save(sub);
         return SubTaskResponse.from(sub);
     }
@@ -222,9 +221,6 @@ public class SubTaskServiceImpl implements SubTaskService {
      * legacy {@code Deadline} Instant column.
      */
     private Instant resolveParentTaskDeadline(Task t) {
-        if (t.getDeadline() != null) {
-            return t.getDeadline();
-        }
         if (t.getDeadlineDate() != null) {
             LocalTime lt = t.getDeadlineTime() != null
                     ? t.getDeadlineTime()

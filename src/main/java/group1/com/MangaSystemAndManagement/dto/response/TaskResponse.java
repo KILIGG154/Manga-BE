@@ -7,7 +7,8 @@ import group1.com.MangaSystemAndManagement.model.TaskWorkflowStatus;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -19,7 +20,8 @@ public class TaskResponse {
     private TaskType productionTaskType;
     private TaskWorkflowStatus taskWorkflowStatus;
     private String acceptanceCriteria;
-    private Instant deadline;
+    private LocalDate deadlineDate;
+    private LocalTime deadlineTime;
     private Long assigneeId;
     private String assigneeName;
     private List<SubTaskResponse> subTasks;
@@ -31,7 +33,8 @@ public class TaskResponse {
         r.productionTaskType = t.getProductionTaskType();
         r.taskWorkflowStatus = t.getTaskWorkflowStatus();
         r.acceptanceCriteria = t.getAcceptanceCriteria();
-        r.deadline = t.getDeadline();
+        r.deadlineDate = t.getDeadlineDate();
+        r.deadlineTime = t.getDeadlineTime();
         if (t.getAssignee() != null) {
             r.assigneeId = t.getAssignee().getId();
             r.assigneeName = t.getAssignee().getFirstName() + " " + t.getAssignee().getLastName();

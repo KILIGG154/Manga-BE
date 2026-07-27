@@ -79,7 +79,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         Submission s = new Submission();
         s.setSubmittedBy(submitter);
         s.setSubmissionType(req.getSubmissionType());
-        s.setStatus(SubmissionStatus.PENDING);
+        s.setProductionStatus(group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.PENDING);
         s.setSubmittedAt(Instant.now());
         s.setContentUrl(req.getNote());
 
@@ -106,8 +106,8 @@ public class SubmissionServiceImpl implements SubmissionService {
         // ----- (e) Parent linkage for REVISION only
         if (req.getSubmissionType() == SubmissionType.REVISION) {
             Submission parent = submissionRepository
-                    .findFirstBySubTaskIdAndStatusOrderBySubmittedAtDesc(
-                            req.getSubTaskId(), SubmissionStatus.REJECTED)
+                    .findFirstBySubTaskIdAndProductionStatusOrderBySubmittedAtDesc(
+                            req.getSubTaskId(), group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.REJECTED)
                     .orElseThrow(() -> new WorkflowRuleViolationException(
                             "REVISION submission requires a previously REJECTED parent"));
             s.setParent(parent);
@@ -120,12 +120,13 @@ public class SubmissionServiceImpl implements SubmissionService {
         s.setFiles(savedFiles);
 
         // ----- (g) Roll-up effect on the SubTask status
-        if (hasSubTask && req.getSubmissionType() == SubmissionType.ROUGH_SKETCH) {
+        if (hasSubTask) {
             SubTask subTask = s.getSubTask();
-            if (subTask.getSubtaskStatus() == SubTaskWorkflowStatus.TODO
-                    || subTask.getSubtaskStatus() == SubTaskWorkflowStatus.IN_PROGRESS
-                    || subTask.getSubtaskStatus() == SubTaskWorkflowStatus.NEEDS_REVISION) {
-                subTask.setSubtaskStatus(SubTaskWorkflowStatus.SUBMITTED);
+            if (req.getSubmissionType() == SubmissionType.ROUGH_SKETCH) {
+                subTask.setSubtaskStatus(SubTaskWorkflowStatus.ROUGH_SUBMITTED);
+                subTaskRepository.save(subTask);
+            } else if (req.getSubmissionType() == SubmissionType.FINAL) {
+                subTask.setSubtaskStatus(SubTaskWorkflowStatus.FINAL_SUBMITTED);
                 subTaskRepository.save(subTask);
             }
         }
@@ -166,7 +167,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         Submission s = new Submission();
         s.setSubmittedBy(submitter);
         s.setSubmissionType(type);
-        s.setStatus(SubmissionStatus.PENDING);
+        s.setProductionStatus(group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.PENDING);
         s.setSubmittedAt(Instant.now());
         s.setContentUrl(req.getNote());
 
@@ -183,8 +184,8 @@ public class SubmissionServiceImpl implements SubmissionService {
         // REVISION must have a rejected parent
         if (type == SubmissionType.REVISION) {
             Submission parent = submissionRepository
-                    .findFirstBySubTaskIdAndStatusOrderBySubmittedAtDesc(
-                            subTask.getId(), SubmissionStatus.REJECTED)
+                    .findFirstBySubTaskIdAndProductionStatusOrderBySubmittedAtDesc(
+                            subTask.getId(), group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.REJECTED)
                     .orElseThrow(() -> new WorkflowRuleViolationException(
                             "REVISION submission requires a previously REJECTED parent"));
             s.setParent(parent);
@@ -193,12 +194,11 @@ public class SubmissionServiceImpl implements SubmissionService {
         s = submissionRepository.save(s);
         s.setFiles(persistFiles(s, files, type));
 
-        // Roll-up: a ROUGH_SKETCH moves a SubTask into SUBMITTED
-        if (type == SubmissionType.ROUGH_SKETCH
-                && (subTask.getSubtaskStatus() == SubTaskWorkflowStatus.TODO
-                    || subTask.getSubtaskStatus() == SubTaskWorkflowStatus.IN_PROGRESS
-                    || subTask.getSubtaskStatus() == SubTaskWorkflowStatus.NEEDS_REVISION)) {
-            subTask.setSubtaskStatus(SubTaskWorkflowStatus.SUBMITTED);
+        if (type == SubmissionType.ROUGH_SKETCH) {
+            subTask.setSubtaskStatus(SubTaskWorkflowStatus.ROUGH_SUBMITTED);
+            subTaskRepository.save(subTask);
+        } else if (type == SubmissionType.FINAL) {
+            subTask.setSubtaskStatus(SubTaskWorkflowStatus.FINAL_SUBMITTED);
             subTaskRepository.save(subTask);
         }
         return SubmissionResponse.from(s);
@@ -229,7 +229,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         Submission s = new Submission();
         s.setSubmittedBy(submitter);
         s.setSubmissionType(type);
-        s.setStatus(SubmissionStatus.PENDING);
+        s.setProductionStatus(group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.PENDING);
         s.setSubmittedAt(Instant.now());
         s.setContentUrl(req.getNote());
 
@@ -269,17 +269,26 @@ public class SubmissionServiceImpl implements SubmissionService {
                     "SubTask is already COMPLETED – re-open it before submitting again");
         }
 
-        // Rule chain: first submission on a new SubTask must be ROUGH_SKETCH.
-        long existingRounds = submissionRepository.countByTarget(null, subTask.getId());
-        if (existingRounds == 0 && type != SubmissionType.ROUGH_SKETCH) {
-            throw new WorkflowRuleViolationException(
-                    "The first submission on a SubTask must be ROUGH_SKETCH");
-        }
-        if (type == SubmissionType.FINAL) {
+        // State Machine validation
+        SubTaskWorkflowStatus status = subTask.getSubtaskStatus();
+        if (type == SubmissionType.ROUGH_SKETCH) {
+            if (status != SubTaskWorkflowStatus.TODO 
+                    && status != SubTaskWorkflowStatus.IN_PROGRESS 
+                    && status != SubTaskWorkflowStatus.ROUGH_REJECTED) {
+                throw new WorkflowRuleViolationException(
+                        "ROUGH_SKETCH can only be submitted when SubTask is TODO, IN_PROGRESS, or ROUGH_REJECTED (current: " + status + ")");
+            }
+        } else if (type == SubmissionType.FINAL) {
+            if (status != SubTaskWorkflowStatus.ROUGH_APPROVED 
+                    && status != SubTaskWorkflowStatus.FINAL_REJECTED) {
+                throw new WorkflowRuleViolationException(
+                        "FINAL can only be submitted when SubTask is ROUGH_APPROVED or FINAL_REJECTED (current: " + status + ")");
+            }
+            
             boolean hasApprovedRough = !submissionRepository
                     .findLatestBySubTaskAndType(subTask.getId(), SubmissionType.ROUGH_SKETCH)
                     .stream()
-                    .filter(x -> x.getStatus() == SubmissionStatus.APPROVED)
+                    .filter(x -> x.getProductionStatus() == group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.APPROVED)
                     .toList()
                     .isEmpty();
             if (!hasApprovedRough) {
@@ -332,20 +341,26 @@ public class SubmissionServiceImpl implements SubmissionService {
                     "TASK_LEVEL is not valid for a SubTask submission");
         }
 
-        // Rule chain: first submission on a new SubTask must be ROUGH_SKETCH.
-        long existingRounds = submissionRepository.countByTarget(null, subTask.getId());
-        if (existingRounds == 0 && type != SubmissionType.ROUGH_SKETCH) {
-            throw new WorkflowRuleViolationException(
-                    "The first submission on a SubTask must be ROUGH_SKETCH");
-        }
-
-        // Rule chain: REVISION must follow a rejected parent (already enforced above
-        // for the version assignment, this block adds type-transition constraints).
-        if (type == SubmissionType.FINAL) {
+        // State Machine validation
+        SubTaskWorkflowStatus status = subTask.getSubtaskStatus();
+        if (type == SubmissionType.ROUGH_SKETCH) {
+            if (status != SubTaskWorkflowStatus.TODO 
+                    && status != SubTaskWorkflowStatus.IN_PROGRESS 
+                    && status != SubTaskWorkflowStatus.ROUGH_REJECTED) {
+                throw new WorkflowRuleViolationException(
+                        "ROUGH_SKETCH can only be submitted when SubTask is TODO, IN_PROGRESS, or ROUGH_REJECTED (current: " + status + ")");
+            }
+        } else if (type == SubmissionType.FINAL) {
+            if (status != SubTaskWorkflowStatus.ROUGH_APPROVED 
+                    && status != SubTaskWorkflowStatus.FINAL_REJECTED) {
+                throw new WorkflowRuleViolationException(
+                        "FINAL can only be submitted when SubTask is ROUGH_APPROVED or FINAL_REJECTED (current: " + status + ")");
+            }
+            
             boolean hasApprovedRough = !submissionRepository
                     .findLatestBySubTaskAndType(subTask.getId(), SubmissionType.ROUGH_SKETCH)
                     .stream()
-                    .filter(x -> x.getStatus() == SubmissionStatus.APPROVED)
+                    .filter(x -> x.getProductionStatus() == group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.APPROVED)
                     .toList()
                     .isEmpty();
             if (!hasApprovedRough) {
@@ -430,19 +445,19 @@ public class SubmissionServiceImpl implements SubmissionService {
                         "Submission not found: " + submissionId));
 
         // ----- (a) Validate status & decision
-        if (s.getStatus() != SubmissionStatus.PENDING) {
+        if (s.getProductionStatus() != group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.PENDING) {
             throw new WorkflowRuleViolationException(
                     "Only PENDING submissions can be reviewed (current: "
-                    + s.getStatus() + ")");
+                    + s.getProductionStatus() + ")");
         }
-        if (req.getDecision() != SubmissionStatus.APPROVED
-                && req.getDecision() != SubmissionStatus.REJECTED) {
+        if (req.getDecision() != group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.APPROVED
+                && req.getDecision() != group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.REJECTED) {
             throw new WorkflowRuleViolationException(
                     "Decision must be APPROVED or REJECTED");
         }
 
         // ----- (b) Reject requires a note (BA rule)
-        if (req.getDecision() == SubmissionStatus.REJECTED
+        if (req.getDecision() == group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.REJECTED
                 && (req.getNote() == null || req.getNote().isBlank())) {
             throw new WorkflowRuleViolationException(
                     "A rejection note is required so the submitter knows what to fix");
@@ -476,7 +491,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         }
 
         // ----- (d) Persist decision on the Submission
-        s.setStatus(req.getDecision());
+        s.setProductionStatus(req.getDecision());
         s.setReviewer(reviewer);
         s.setReviewedAt(Instant.now());
         if (req.getNote() != null && !req.getNote().isBlank()) {
@@ -487,7 +502,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         // ----- (e) Cascade effects
         if (s.getSubTask() != null) {
             cascadeSubTaskReview(s);
-        } else if (s.getTask() != null && req.getDecision() == SubmissionStatus.APPROVED) {
+        } else if (s.getTask() != null && req.getDecision() == group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.APPROVED) {
             cascadeTaskApproval(s);
         }
         return SubmissionResponse.from(s);
@@ -495,22 +510,24 @@ public class SubmissionServiceImpl implements SubmissionService {
 
     private void cascadeSubTaskReview(Submission s) {
         SubTask sub = s.getSubTask();
-        switch (s.getStatus()) {
+        switch (s.getProductionStatus()) {
             case APPROVED -> {
                 if (s.getSubmissionType() == SubmissionType.FINAL) {
                     sub.setSubtaskStatus(SubTaskWorkflowStatus.COMPLETED);
                     subTaskRepository.save(sub);
                     // Roll-up Task + Plan
                     recomputeTaskProgress(sub.getTask().getId());
-                } else if (s.getSubmissionType() == SubmissionType.ROUGH_SKETCH
-                        || s.getSubmissionType() == SubmissionType.REVISION) {
-                    // Approved non-final → Assistant is clear to submit a FINAL.
-                    sub.setSubtaskStatus(SubTaskWorkflowStatus.IN_PROGRESS);
+                } else {
+                    sub.setSubtaskStatus(SubTaskWorkflowStatus.ROUGH_APPROVED);
                     subTaskRepository.save(sub);
                 }
             }
             case REJECTED -> {
-                sub.setSubtaskStatus(SubTaskWorkflowStatus.NEEDS_REVISION);
+                if (s.getSubmissionType() == SubmissionType.FINAL) {
+                    sub.setSubtaskStatus(SubTaskWorkflowStatus.FINAL_REJECTED);
+                } else {
+                    sub.setSubtaskStatus(SubTaskWorkflowStatus.ROUGH_REJECTED);
+                }
                 subTaskRepository.save(sub);
             }
             default -> { /* no-op */ }
@@ -589,7 +606,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         submission.setSubmittedBy(submitter);
         submission.setTitle(request.getTitle());
         submission.setContentUrl(request.getNote());
-        submission.setStatus(SubmissionStatus.PENDING);
+        submission.setProductionStatus(group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.PENDING);
         submission.setSubmissionType(SubmissionType.TASK_LEVEL);
         submission.setSubmittedAt(Instant.now());
 
@@ -638,9 +655,9 @@ public class SubmissionServiceImpl implements SubmissionService {
         Submission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new RuntimeException("Submission not found with id " + submissionId));
 
-        if (submission.getStatus() != SubmissionStatus.PENDING) {
+        if (submission.getNameStatus() != group1.com.MangaSystemAndManagement.model.NameSubmissionStatus.APPROVED) {
             throw new WorkflowRuleViolationException(
-                    "Only PENDING submissions can be approved (current: " + submission.getStatus() + ")");
+                    "Only APPROVED submissions can be converted to projects (current: " + submission.getNameStatus() + ")");
         }
 
         // Build project from submission fields
@@ -655,7 +672,7 @@ public class SubmissionServiceImpl implements SubmissionService {
 
         // Link submission to the new project
         submission.setProject(project);
-        submission.setStatus(SubmissionStatus.APPROVED);
+        submission.setNameStatus(group1.com.MangaSystemAndManagement.model.NameSubmissionStatus.APPROVED);
         submission.setReviewedAt(Instant.now());
 
         return submissionRepository.save(submission);

@@ -1,7 +1,7 @@
 package group1.com.MangaSystemAndManagement.repository;
 
 import group1.com.MangaSystemAndManagement.model.Submission;
-import group1.com.MangaSystemAndManagement.model.SubmissionStatus;
+import group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus;
 import group1.com.MangaSystemAndManagement.model.SubmissionType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -61,6 +61,6 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
      * a new {@code REVISION} round to its rejected parent. Sort uses
      * {@code submittedAt} – no separate version column required.
      */
-    Optional<Submission> findFirstBySubTaskIdAndStatusOrderBySubmittedAtDesc(Long subTaskId,
-                                                                             SubmissionStatus status);
+    Optional<Submission> findFirstBySubTaskIdAndProductionStatusOrderBySubmittedAtDesc(Long subTaskId,
+                                                                             ProductionSubmissionStatus status);
 }

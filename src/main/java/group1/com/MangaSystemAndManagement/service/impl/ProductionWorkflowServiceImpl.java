@@ -5,6 +5,8 @@ import group1.com.MangaSystemAndManagement.dto.response.*;
 import group1.com.MangaSystemAndManagement.model.*;
 import group1.com.MangaSystemAndManagement.repository.*;
 import group1.com.MangaSystemAndManagement.service.interfaces.ProductionWorkflowService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.access.AccessDeniedException;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -19,6 +22,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ProductionWorkflowServiceImpl implements ProductionWorkflowService {
+
+    @PersistenceContext
+    private EntityManager em;
 
     private final ProjectRepository projectRepository;
     private final ProductionPlanRepository productionPlanRepository;
@@ -74,7 +80,7 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
             if (existingPlan.isEmpty()) {
                 ProductionPlan plan = new ProductionPlan();
                 plan.setProject(project);
-                plan.setPlanStatus(PlanStatus.PLANNING);
+                plan.setPlanStatus(PlanStatus.IN_PROGRESS);
                 productionPlanRepository.save(plan);
             }
         }
@@ -145,11 +151,14 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
 
         ProductionPlan plan = productionPlanRepository.findById(req.getPlanId())
                 .orElseThrow(() -> new RuntimeException("Plan not found"));
+        em.refresh(plan);
 
-        if (req.getStartDate().isAfter(req.getEndDate())) {
+        assertPlanNotPaused(plan);
+
+        if (req.getStartDate() != null && req.getEndDate() != null
+                && req.getStartDate().isAfter(req.getEndDate())) {
             throw new IllegalArgumentException("Chapter start date cannot be after end date");
         }
-        
         if (plan.getStartDate() != null && req.getStartDate().isBefore(plan.getStartDate())) {
             throw new IllegalArgumentException("Chapter start date cannot be before Production Plan start date (" + plan.getStartDate() + ")");
         }
@@ -169,6 +178,9 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         chapter.setEndDate(req.getEndDate());
         chapter.setChapterStatus(ChapterStatus.BACKLOG);
         chapter.setOwner(requester);
+
+        // Guard: PAUSED plan is already covered by assertPlanNotPaused above.
+        // BA V3 §1: pre-approval is gone — any plan with planStatus IN_PROGRESS can host chapters.
 
         chapter = chapterRepository.save(chapter);
 
@@ -205,6 +217,8 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new RuntimeException("Task not found"));
         Account requester = getAccount(req.getRequesterId());
+
+        assertPlanNotPaused(task.getChapter() != null ? task.getChapter().getProductionPlan() : null);
 
         boolean isTantou = requester.hasRole(SystemRoleName.TANTOU_EDITOR);
         boolean isMangaka = requester.hasRole(SystemRoleName.MANGAKA);
@@ -255,6 +269,8 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new RuntimeException("Task not found"));
 
+        assertPlanNotPaused(task.getChapter() != null ? task.getChapter().getProductionPlan() : null);
+
         if (task.getTaskWorkflowStatus() != TaskWorkflowStatus.REVIEW) {
             throw new IllegalStateException("Feedback can only be provided for tasks in REVIEW status");
         }
@@ -295,6 +311,8 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
             throw new AccessDeniedException("Only Tantou Editor can assign chapters");
         }
 
+        assertPlanNotPaused(chapter.getProductionPlan());
+
         if (!mangaka.hasRole(SystemRoleName.MANGAKA)) {
             throw new IllegalArgumentException("The assignee must be a Mangaka");
         }
@@ -325,6 +343,8 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new RuntimeException("Task not found"));
         Account assignee = getAccount(req.getAssigneeId());
+
+        assertPlanNotPaused(task.getChapter() != null ? task.getChapter().getProductionPlan() : null);
 
         boolean isTantou = requester.hasRole(SystemRoleName.TANTOU_EDITOR);
         boolean isMangaka = requester.hasRole(SystemRoleName.MANGAKA);
@@ -364,7 +384,8 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
                 throw new IllegalArgumentException("Task deadline cannot be after Chapter end date (" + chapter.getEndDate() + ")");
             }
 
-            task.setDeadline(deadline);
+            task.setDeadlineDate(java.time.LocalDate.ofInstant(deadline, java.time.ZoneId.systemDefault()));
+            task.setDeadlineTime(java.time.LocalTime.ofInstant(deadline, java.time.ZoneId.systemDefault()));
         }
 
         task.setAssignee(assignee);
@@ -398,6 +419,30 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
     private Project getProject(Long id) {
         return projectRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
+    }
+
+    /**
+     * BA V3 §2.2: PAUSED plans block any chapter creation, task assignment, status update,
+     * or feedback submission. Read-only operations (dashboard, asset listing) are still allowed.
+     */
+    private void assertPlanNotPaused(ProductionPlan plan) {
+        if (plan != null) {
+            // Always re-fetch from DB to pick up the latest planStatus. Previous PAUSE/RESUME
+            // calls in the same HTTP request cycle may not have been flushed to DB yet.
+            if (plan.getId() != null) {
+                plan = productionPlanRepository.findById(plan.getId()).orElse(plan);
+            }
+            if (plan.getPlanStatus() == PlanStatus.PAUSED) {
+                throw new IllegalStateException(
+                        "Production Plan " + plan.getId() + " is PAUSED. Submissions are frozen. "
+                                + "Resume the plan first.");
+            }
+            if (plan.getProject() != null
+                    && plan.getProject().getProjectWorkflowStatus() == ProjectWorkflowStatus.CANCELLED) {
+                throw new IllegalStateException(
+                        "Project " + plan.getProject().getId() + " is CANCELLED. Cannot mutate chapters/tasks.");
+            }
+        }
     }
 
     private ProjectResponse mapToProjectResponse(Project p) {
@@ -447,7 +492,6 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         }
         r.setTitle(st.getTitle());
         r.setDescription(st.getDescription());
-        r.setProductionTaskType(st.getProductionTaskType());
         r.setSubtaskStatus(st.getSubtaskStatus());
         r.setDeadlineDate(st.getDeadlineDate());
         r.setDeadlineTime(st.getDeadlineTime());
@@ -505,16 +549,37 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         Chapter chapter = chapterRepository.findById(chapterId)
                 .orElseThrow(() -> new RuntimeException("Chapter not found"));
 
+        assertPlanNotPaused(chapter.getProductionPlan());
+
         if (status == ChapterStatus.COMPLETED) {
             boolean hasIncompleteTasks = taskRepository.existsByChapterIdAndTaskWorkflowStatusNot(chapterId,
                     TaskWorkflowStatus.DONE);
             if (hasIncompleteTasks) {
                 throw new IllegalStateException("Cannot complete chapter: not all tasks are DONE.");
             }
+
+            // Decision Log 2026-07-27 §AI-09: reset rejectionCount to 0 when chapter
+            // is re-completed (IN_PRODUCTION → COMPLETED) so the chapter gets a fresh
+            // "budget" of 2 return attempts. Done only on re-completion, not the first
+            // time (which would also be 0).
+            if (chapter.getRejectionCount() != null && chapter.getRejectionCount() > 0) {
+                chapter.setRejectionCount(0);
+            }
         }
 
         chapter.setChapterStatus(status);
         chapter = chapterRepository.save(chapter);
+
+        // Auto-complete the ProductionPlan when all its chapters are PUBLISHED
+        if (status == ChapterStatus.PUBLISHED && chapter.getProductionPlan() != null) {
+            ProductionPlan plan = chapter.getProductionPlan();
+            boolean allPublished = !chapterRepository
+                    .existsByProductionPlanIdAndChapterStatusNot(plan.getId(), ChapterStatus.PUBLISHED);
+            if (allPublished && plan.getPlanStatus() != PlanStatus.COMPLETED) {
+                plan.setPlanStatus(PlanStatus.COMPLETED);
+                productionPlanRepository.save(plan);
+            }
+        }
 
         ChapterWithTasksResponse cr = new ChapterWithTasksResponse();
         BeanUtils.copyProperties(chapter, cr);
@@ -523,5 +588,353 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
                 .map(this::mapToTaskWithSubTasksResponse)
                 .collect(Collectors.toList()));
         return cr;
+    }
+
+    // =========================================================================
+    // Publishing flow
+    // =========================================================================
+
+    @Override
+    public List<ChapterResponse> getPublishableChapters(Long projectId, Long requesterId) {
+        Account requester = getAccount(requesterId);
+        if (!requester.hasRole(SystemRoleName.LEADER_BOARD)
+                && !requester.hasRole(SystemRoleName.EDITORIAL_BOARD_MEMBER)) {
+            throw new AccessDeniedException(
+                    "Only LEADER_BOARD or EDITORIAL_BOARD_MEMBER can view publishable chapters");
+        }
+        // Verify project exists
+        getProject(projectId);
+        return chapterRepository
+                .findByProjectIdAndChapterStatus(projectId, ChapterStatus.COMPLETED)
+                .stream()
+                .map(ChapterResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public ChapterResponse publishChapter(Long chapterId, Long requesterId, java.time.LocalDate publishDate, String releaseNote) {
+        Account requester = getAccount(requesterId);
+        // BA V3 §3.1: both LEADER_BOARD and EDITORIAL_BOARD_MEMBER can publish (single-signoff).
+        if (!requester.hasRole(SystemRoleName.LEADER_BOARD)
+                && !requester.hasRole(SystemRoleName.EDITORIAL_BOARD_MEMBER)) {
+            throw new AccessDeniedException(
+                    "Only LEADER_BOARD or EDITORIAL_BOARD_MEMBER can publish a chapter");
+        }
+
+        Chapter chapter = chapterRepository.findById(chapterId)
+                .orElseThrow(() -> new RuntimeException("Chapter not found: " + chapterId));
+
+        if (chapter.getChapterStatus() != ChapterStatus.COMPLETED) {
+            throw new IllegalStateException(
+                    "Only COMPLETED chapters can be published (current status: "
+                    + chapter.getChapterStatus() + ")");
+        }
+        if (chapter.getChapterStatus() == ChapterStatus.PUBLISHED) {
+            throw new IllegalStateException("Chapter is already PUBLISHED");
+        }
+
+        chapter.setPublishDate(publishDate != null ? publishDate : java.time.LocalDate.now());
+        chapter.setChapterStatus(ChapterStatus.PUBLISHED);
+        // BA V3 §3.1 — record who/when published (single-signoff audit trail).
+        chapter.setPublishedBy(requesterId);
+        chapter.setPublishedAt(java.time.Instant.now());
+        // Decision Log 2026-07-27 §AI-01: releaseNote is OPTIONAL (nullable).
+        chapter.setReleaseNote(releaseNote != null && !releaseNote.isBlank() ? releaseNote : null);
+        chapter = chapterRepository.save(chapter);
+
+        // Auto-complete the ProductionPlan if all chapters are now PUBLISHED.
+        // Decision Log §AI-03: dynamic — based on existing chapters only, NOT on targetChapterCount.
+        if (chapter.getProductionPlan() != null) {
+            ProductionPlan plan = chapter.getProductionPlan();
+            boolean allPublished = !chapterRepository
+                    .existsByProductionPlanIdAndChapterStatusNot(plan.getId(), ChapterStatus.PUBLISHED);
+            if (allPublished && plan.getPlanStatus() != PlanStatus.COMPLETED) {
+                plan.setPlanStatus(PlanStatus.COMPLETED);
+                productionPlanRepository.save(plan);
+            }
+        }
+
+        return ChapterResponse.from(chapter);
+    }
+
+    // Backward-compat overload — used by controller endpoint that doesn't yet accept releaseNote.
+    @Override
+    @Transactional
+    public ChapterResponse publishChapter(Long chapterId, Long leaderId, java.time.LocalDate publishDate) {
+        return publishChapter(chapterId, leaderId, publishDate, null);
+    }
+
+    @Override
+    @Transactional
+    public ChapterResponse recallChapter(Long chapterId, Long requesterId, RecallChapterRequest request) {
+        Account requester = getAccount(requesterId);
+        // BA V3 §3.4: only LEADER_BOARD or EDITORIAL_BOARD_MEMBER can recall.
+        if (!requester.hasRole(SystemRoleName.LEADER_BOARD)
+                && !requester.hasRole(SystemRoleName.EDITORIAL_BOARD_MEMBER)) {
+            throw new AccessDeniedException(
+                    "Only LEADER_BOARD or EDITORIAL_BOARD_MEMBER can recall a chapter");
+        }
+
+        Chapter chapter = chapterRepository.findById(chapterId)
+                .orElseThrow(() -> new RuntimeException("Chapter not found: " + chapterId));
+
+        // Decision Log 2026-07-27 §AI-07: recallCount cap = 2. Lần 3 requires Leader override.
+        int currentRecallCount = chapter.getRecallCount() == null ? 0 : chapter.getRecallCount();
+        if (currentRecallCount >= 2) {
+            throw new IllegalStateException(
+                    "Chapter đã bị thu hồi " + currentRecallCount
+                            + " lần (đã đạt giới hạn tối đa). Bắt buộc Leader can thiệp xử lý đặc biệt.");
+        }
+
+        return doRecall(chapter, request.getRecallReason());
+    }
+
+    @Override
+    @Transactional
+    public ChapterResponse overrideRecallChapter(Long chapterId, Long requesterId, OverrideRecallRequest request) {
+        Account requester = getAccount(requesterId);
+        // Decision Log 2026-07-27 §AI-07 follow-up: override chỉ Leader.
+        if (!requester.hasRole(SystemRoleName.LEADER_BOARD)) {
+            throw new AccessDeniedException(
+                    "Only LEADER_BOARD can override the recall limit");
+        }
+
+        Chapter chapter = chapterRepository.findById(chapterId)
+                .orElseThrow(() -> new RuntimeException("Chapter not found: " + chapterId));
+
+        if (chapter.getChapterStatus() != ChapterStatus.PUBLISHED) {
+            throw new IllegalStateException(
+                    "Only PUBLISHED chapters can be recalled (current status: "
+                            + chapter.getChapterStatus() + ")");
+        }
+
+        // Override path: skip the recallCount cap, force-recall.
+        return doRecall(chapter, request.getRecallReason());
+    }
+
+    /**
+     * Shared logic for recall (auto + override). BA V3 §3.4 + Decision Log §AI-04.
+     * Does NOT auto-reopen Tasks — Tantou must explicitly call markTaskRevision.
+     */
+    private ChapterResponse doRecall(Chapter chapter, String recallReason) {
+        if (chapter.getChapterStatus() != ChapterStatus.PUBLISHED) {
+            throw new IllegalStateException(
+                    "Only PUBLISHED chapters can be recalled (current status: "
+                            + chapter.getChapterStatus() + ")");
+        }
+
+        int currentRecallCount = chapter.getRecallCount() == null ? 0 : chapter.getRecallCount();
+        chapter.setChapterStatus(ChapterStatus.IN_PRODUCTION);
+        chapter.setRecallCount(currentRecallCount + 1);
+        chapter.setRecallReason(recallReason);
+        chapter = chapterRepository.save(chapter);
+
+        // If Plan was COMPLETED, roll back to IN_PROGRESS.
+        if (chapter.getProductionPlan() != null) {
+            ProductionPlan plan = chapter.getProductionPlan();
+            if (plan.getPlanStatus() == PlanStatus.COMPLETED) {
+                plan.setPlanStatus(PlanStatus.IN_PROGRESS);
+                productionPlanRepository.save(plan);
+            }
+        }
+
+        return ChapterResponse.from(chapter);
+    }
+
+    /**
+     * Decision Log 2026-07-27 §AI-04: endpoint mới để Tantou chọn 1 Task cụ thể và set sang
+     * REVISION_REQUIRED. Task chỉ chuyển nếu Chapter thuộc Plan = IN_PROGRESS (không phải
+     * PAUSED/CANCELLED).
+     */
+    @Override
+    @Transactional
+    public group1.com.MangaSystemAndManagement.dto.response.TaskResponse markTaskRevision(
+            Long taskId, group1.com.MangaSystemAndManagement.dto.request.MarkTaskRevisionRequest req) {
+        Account tantou = getAccount(req.getTantouId());
+        boolean isTantou = tantou.hasRole(SystemRoleName.TANTOU_EDITOR);
+        boolean isLeader = tantou.hasRole(SystemRoleName.LEADER_BOARD);
+        if (!isTantou && !isLeader) {
+            throw new AccessDeniedException(
+                    "Only TANTOU_EDITOR or LEADER_BOARD can mark a task for revision");
+        }
+
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new RuntimeException("Task not found: " + taskId));
+
+        Chapter chapter = task.getChapter();
+        if (chapter == null || chapter.getProductionPlan() == null) {
+            throw new IllegalStateException(
+                    "Task must belong to a Chapter attached to an active ProductionPlan");
+        }
+
+        // AI-04: only meaningful if Chapter is back in production (post-Recall/Return).
+        if (chapter.getChapterStatus() != ChapterStatus.IN_PRODUCTION) {
+            throw new IllegalStateException(
+                    "Mark-as-revision only allowed while Chapter is IN_PRODUCTION (current: "
+                            + chapter.getChapterStatus() + ")");
+        }
+
+        ProductionPlan plan = chapter.getProductionPlan();
+        assertPlanNotPaused(plan);  // pause vẫn chặn
+
+        if (task.getTaskWorkflowStatus() != TaskWorkflowStatus.DONE
+                && task.getTaskWorkflowStatus() != TaskWorkflowStatus.REVIEW) {
+            throw new IllegalStateException(
+                    "Only DONE or REVIEW tasks can be marked for revision (current: "
+                            + task.getTaskWorkflowStatus() + ")");
+        }
+
+        task.setTaskWorkflowStatus(TaskWorkflowStatus.REVISION_REQUIRED);
+        task = taskRepository.save(task);
+        return group1.com.MangaSystemAndManagement.dto.response.TaskResponse.from(task);
+    }
+
+    @Override
+    @Transactional
+    public ChapterResponse returnChapterToProduction(Long chapterId, Long requesterId, ReturnChapterRequest request) {
+        return doReturn(chapterId, requesterId, request, false);
+    }
+
+    @Override
+    @Transactional
+    public ChapterResponse overrideReturnLimit(Long chapterId, Long requesterId, ReturnChapterRequest request) {
+        return doReturn(chapterId, requesterId, request, true);
+    }
+
+    /**
+     * Shared logic for return + override. BA V3 §3.3:
+     *  - Auto-return: rejectionCount < 2 → transition COMPLETED → IN_PRODUCTION, ++rejectionCount.
+     *  - Auto-return: rejectionCount >= 2 → refuse; lock chapter in COMPLETED_NEEDS_REVIEW.
+     *  - Override (Leader only): skip the cap, force-return.
+     */
+    private ChapterResponse doReturn(Long chapterId, Long requesterId, ReturnChapterRequest request, boolean override) {
+        Account requester = getAccount(requesterId);
+        boolean isLeader = requester.hasRole(SystemRoleName.LEADER_BOARD);
+        boolean isBoard = requester.hasRole(SystemRoleName.EDITORIAL_BOARD_MEMBER);
+
+        if (!isLeader && !isBoard) {
+            throw new AccessDeniedException(
+                    "Only LEADER_BOARD or EDITORIAL_BOARD_MEMBER can return a chapter");
+        }
+        if (override && !isLeader) {
+            throw new AccessDeniedException(
+                    "Only LEADER_BOARD can override the rejection limit");
+        }
+
+        Chapter chapter = chapterRepository.findById(chapterId)
+                .orElseThrow(() -> new RuntimeException("Chapter not found: " + chapterId));
+
+        if (chapter.getChapterStatus() != ChapterStatus.COMPLETED) {
+            throw new IllegalStateException(
+                    "Only COMPLETED chapters can be returned (current status: "
+                            + chapter.getChapterStatus() + ")");
+        }
+
+        int currentRejectionCount = chapter.getRejectionCount() == null ? 0 : chapter.getRejectionCount();
+        if (currentRejectionCount >= 2 && !override) {
+            chapter.setChapterStatus(ChapterStatus.COMPLETED_NEEDS_REVIEW);
+            chapter = chapterRepository.save(chapter);
+            throw new IllegalStateException(
+                    "Chapter đã bị trả về " + currentRejectionCount
+                            + " lần. Bắt buộc tổ chức họp Hội đồng để chốt phương án. "
+                            + "Chapter đã được khóa ở COMPLETED_NEEDS_REVIEW.");
+        }
+
+        chapter.setChapterStatus(ChapterStatus.IN_PRODUCTION);
+        chapter.setRejectionCount(currentRejectionCount + 1);
+        chapter.setRejectionReason(request.getRejectionReason());
+        chapter = chapterRepository.save(chapter);
+
+        // Decision Log 2026-07-27 §AI-04: do NOT auto-reopen Tasks on Return.
+        // Tantou chủ động gọi markTaskRevision(taskId) cho từng Task cụ thể.
+        // Tasks giữ nguyên trạng thái.
+
+        // Roll back Plan if it was COMPLETED (BA V3 §2.1 soft-terminal behavior).
+        if (chapter.getProductionPlan() != null) {
+            ProductionPlan plan = chapter.getProductionPlan();
+            if (plan.getPlanStatus() == PlanStatus.COMPLETED) {
+                plan.setPlanStatus(PlanStatus.IN_PROGRESS);
+                productionPlanRepository.save(plan);
+            }
+        }
+
+        return ChapterResponse.from(chapter);
+    }
+
+    // =========================================================================
+    // AI-08: schedule + auto-publish scheduler
+    // =========================================================================
+
+    @Override
+    @Transactional
+    public ChapterResponse scheduleChapter(Long chapterId, Long requesterId, ScheduleChapterRequest request) {
+        Account requester = getAccount(requesterId);
+        if (!requester.hasRole(SystemRoleName.TANTOU_EDITOR)
+                && !requester.hasRole(SystemRoleName.LEADER_BOARD)
+                && !requester.hasRole(SystemRoleName.EDITORIAL_BOARD_MEMBER)) {
+            throw new AccessDeniedException(
+                    "Only TANTOU/LEADER/BOARD can schedule a chapter");
+        }
+
+        Chapter chapter = chapterRepository.findById(chapterId)
+                .orElseThrow(() -> new RuntimeException("Chapter not found: " + chapterId));
+
+        if (chapter.getChapterStatus() != ChapterStatus.COMPLETED
+                && chapter.getChapterStatus() != ChapterStatus.SCHEDULED) {
+            throw new IllegalStateException(
+                    "Only COMPLETED or SCHEDULED chapters can be scheduled (current status: "
+                            + chapter.getChapterStatus() + ")");
+        }
+
+        if (request.getPublishDate() == null) {
+            throw new IllegalArgumentException("publishDate is required");
+        }
+        if (request.getPublishDate().isBefore(java.time.LocalDate.now())) {
+            throw new IllegalArgumentException("publishDate must not be in the past");
+        }
+
+        chapter.setChapterStatus(ChapterStatus.SCHEDULED);
+        chapter.setPublishDate(request.getPublishDate());
+        chapter = chapterRepository.save(chapter);
+        return ChapterResponse.from(chapter);
+    }
+
+    @Override
+    @Transactional
+    public int publishDueScheduledChapters() {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        List<Chapter> due = chapterRepository
+                .findByProductionPlanIdAndChapterStatus(null, ChapterStatus.SCHEDULED); // placeholder
+        // Use a custom query instead:
+        due = chapterRepository.findByChapterStatusAndPublishDateLessThanEqual(
+                ChapterStatus.SCHEDULED, today);
+        int count = 0;
+        for (Chapter chapter : due) {
+            try {
+                chapter.setChapterStatus(ChapterStatus.PUBLISHED);
+                // publishedBy = system (0). Caller null-allowed since field is Long.
+                chapter.setPublishedBy(0L);
+                chapter.setPublishedAt(java.time.Instant.now());
+                chapterRepository.save(chapter);
+                count++;
+
+                // Auto-complete Plan if all chapters are now PUBLISHED (§AI-03).
+                if (chapter.getProductionPlan() != null) {
+                    ProductionPlan plan = chapter.getProductionPlan();
+                    boolean allPublished = !chapterRepository
+                            .existsByProductionPlanIdAndChapterStatusNot(plan.getId(), ChapterStatus.PUBLISHED);
+                    if (allPublished && plan.getPlanStatus() != PlanStatus.COMPLETED) {
+                        plan.setPlanStatus(PlanStatus.COMPLETED);
+                        productionPlanRepository.save(plan);
+                    }
+                }
+            } catch (Exception e) {
+                // best-effort: log and continue with next chapter
+                System.err.println("[AI-08 scheduler] Failed to publish chapter "
+                        + chapter.getId() + ": " + e.getMessage());
+            }
+        }
+        return count;
     }
 }

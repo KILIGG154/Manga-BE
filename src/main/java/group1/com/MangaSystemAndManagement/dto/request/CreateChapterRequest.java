@@ -1,5 +1,6 @@
 package group1.com.MangaSystemAndManagement.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
@@ -22,11 +23,14 @@ public class CreateChapterRequest {
 
     private Integer targetPageCount;
 
-    @NotNull(message = "Start date is required")
     private LocalDate startDate;
 
-    @NotNull(message = "End date is required")
     private LocalDate endDate;
 
     private LocalDate publishDate;
+
+    @JsonProperty("productionPlanId")
+    public void setProductionPlanId(Long productionPlanId) {
+        this.planId = productionPlanId;
+    }
 }

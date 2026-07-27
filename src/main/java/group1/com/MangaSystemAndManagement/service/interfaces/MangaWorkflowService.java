@@ -19,4 +19,5 @@ public interface MangaWorkflowService {
     List<SubmissionReviewResponse> listReviewsForSubmission(Long submissionId);
     void assignTantouToProject(Long projectId, Long tantouId);
     void assignMangakaToProject(Long projectId, Long mangakaId);
+    Submission requestRevision(Long submissionId, Long leaderId, String comment);
 }
