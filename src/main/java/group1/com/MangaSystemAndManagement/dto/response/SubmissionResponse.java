@@ -22,6 +22,10 @@ public class SubmissionResponse {
     private Long parentSubmissionId;
     private NameSubmissionStatus nameStatus;
     private ProductionSubmissionStatus productionStatus;
+    private String title;
+    private String genre;
+    private String targetAudience;
+    private group1.com.MangaSystemAndManagement.model.ProjectFormat format;
     private String note;
     private Long submittedById;
     private String submittedByName;
@@ -43,6 +47,10 @@ public class SubmissionResponse {
         r.parentSubmissionId = s.getParent() != null ? s.getParent().getId() : null;
         r.nameStatus = s.getNameStatus();
         r.productionStatus = s.getProductionStatus();
+        r.title = s.getTitle();
+        r.genre = s.getGenre();
+        r.targetAudience = s.getTargetAudience();
+        r.format = s.getFormat();
         r.note = s.getContentUrl();
         if (s.getSubmittedBy() != null) {
             r.submittedById = s.getSubmittedBy().getId();

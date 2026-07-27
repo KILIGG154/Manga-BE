@@ -73,6 +73,16 @@ public class Submission {
     @Column(name = "Title")
     private String title;
 
+    @Column(name = "Genre")
+    private String genre;
+
+    @Column(name = "TargetAudience")
+    private String targetAudience;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "Format", length = 50)
+    private group1.com.MangaSystemAndManagement.model.ProjectFormat format;
+
     @Nationalized
     @Column(name = "Story", columnDefinition = "nvarchar(max)")
     private String story;
