@@ -63,6 +63,59 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
 
     @Override
     @Transactional
+    public ProjectResponse updateProjectByBoard(Long projectId, UpdateProjectBoardRequest req, Long editorId) {
+        Account editor = getAccount(editorId);
+        if (!editor.hasRole(SystemRoleName.EDITORIAL_BOARD_MEMBER) && !editor.hasRole(SystemRoleName.LEADER_BOARD)) {
+            throw new AccessDeniedException("Only EDITORIAL_BOARD_MEMBER or LEADER_BOARD can update project status and Tantou");
+        }
+
+        Project project = getProject(projectId);
+        if (req.getProjectWorkflowStatus() != null) {
+            project.setProjectWorkflowStatus(req.getProjectWorkflowStatus());
+        }
+        if (req.getTantouId() != null) {
+            Account tantou = getAccount(req.getTantouId());
+            if (!tantou.hasRole(SystemRoleName.TANTOU_EDITOR)) {
+                throw new IllegalArgumentException("Assigned account must have the TANTOU_EDITOR role");
+            }
+            project.setOwner(tantou);
+        }
+
+        project = projectRepository.save(project);
+        return mapToProjectResponse(project);
+    }
+
+    @Override
+    @Transactional
+    public ProjectResponse updateProjectByTantou(Long projectId, UpdateProjectTantouRequest req, Long tantouId) {
+        Account tantou = getAccount(tantouId);
+        if (!tantou.hasRole(SystemRoleName.TANTOU_EDITOR)) {
+            throw new AccessDeniedException("Only TANTOU can update project details");
+        }
+
+        Project project = getProject(projectId);
+        
+        // Optionally verify if this Tantou is the owner of this project
+        if (project.getOwner() == null || project.getOwner().getId() != tantouId) {
+            throw new AccessDeniedException("You are not the assigned Tantou for this project");
+        }
+
+        if (req.getGenre() != null) {
+            project.setGenre(req.getGenre());
+        }
+        if (req.getTargetAudience() != null) {
+            project.setTargetAudience(req.getTargetAudience());
+        }
+        if (req.getFormat() != null) {
+            project.setFormat(req.getFormat());
+        }
+
+        project = projectRepository.save(project);
+        return mapToProjectResponse(project);
+    }
+
+    @Override
+    @Transactional
     public ProjectResponse activateProject(Long projectId, Long requesterId) {
         Account requester = getAccount(requesterId);
         if (!requester.hasRole(SystemRoleName.TANTOU_EDITOR)) {

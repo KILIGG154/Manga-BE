@@ -39,6 +39,33 @@ public class ProductionWorkflowController {
             return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
         }
     }
+    @PutMapping("/projects/{projectId}/board")
+    @Operation(summary = "Update project status and Tantou (Editorial/Leader Board only)")
+    public ResponseEntity<ResponseBase> updateProjectByBoard(@PathVariable Long projectId, 
+            @Valid @RequestBody UpdateProjectBoardRequest req, @RequestParam Long editorId) {
+        try {
+            var res = workflowService.updateProjectByBoard(projectId, req, editorId);
+            return ResponseEntity.ok(new ResponseBase(200, "Project updated by Board", res));
+        } catch (AccessDeniedException ad) {
+            return ResponseEntity.status(403).body(new ResponseBase(403, ad.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
+
+    @PutMapping("/projects/{projectId}/details")
+    @Operation(summary = "Update project details (genre, target audience, format) (Tantou only)")
+    public ResponseEntity<ResponseBase> updateProjectByTantou(@PathVariable Long projectId, 
+            @Valid @RequestBody UpdateProjectTantouRequest req, @RequestParam Long tantouId) {
+        try {
+            var res = workflowService.updateProjectByTantou(projectId, req, tantouId);
+            return ResponseEntity.ok(new ResponseBase(200, "Project details updated by Tantou", res));
+        } catch (AccessDeniedException ad) {
+            return ResponseEntity.status(403).body(new ResponseBase(403, ad.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
 
     @PutMapping("/projects/{projectId}/status")
     @Operation(summary = "Update project status -> Triggers auto-plan creation if ACTIVE (Tantou only)")

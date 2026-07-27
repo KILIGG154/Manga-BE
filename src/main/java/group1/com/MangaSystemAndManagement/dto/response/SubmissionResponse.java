@@ -32,6 +32,8 @@ public class SubmissionResponse {
     private List<SubmissionFileResponse> files;
     private Integer fileCount;
 
+    private List<SubmissionReviewResponse> reviews;
+
     public static SubmissionResponse from(Submission s) {
         SubmissionResponse r = new SubmissionResponse();
         r.id = s.getId();
@@ -59,6 +61,13 @@ public class SubmissionResponse {
                     .map(SubmissionFileResponse::from)
                     .collect(Collectors.toList());
             r.fileCount = r.files.size();
+        } else {
+            r.fileCount = 0;
+        }
+        if (s.getReviews() != null) {
+            r.reviews = s.getReviews().stream()
+                    .map(SubmissionReviewResponse::from)
+                    .collect(Collectors.toList());
         }
         return r;
     }

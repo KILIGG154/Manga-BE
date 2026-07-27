@@ -12,6 +12,10 @@ public interface ProductionWorkflowService {
 
     ProjectResponse activateProject(Long projectId, Long requesterId);
 
+    ProjectResponse updateProjectByBoard(Long projectId, UpdateProjectBoardRequest req, Long editorId);
+
+    ProjectResponse updateProjectByTantou(Long projectId, UpdateProjectTantouRequest req, Long tantouId);
+
     PlanDashboardResponse getPlanDashboard(Long planId, Long requesterId);
 
     ChapterWithTasksResponse createChapter(CreateChapterRequest req, Long requesterId);
