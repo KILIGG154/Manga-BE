@@ -34,6 +34,7 @@ public class ProductionPlanResponse {
     private List<ChapterResponse> chapters;
 
     public static ProductionPlanResponse from(ProductionPlan pp) {
+        if (pp == null) return null;
         ProductionPlanResponse r = new ProductionPlanResponse();
         r.id = pp.getId();
         if (pp.getProject() != null) {
