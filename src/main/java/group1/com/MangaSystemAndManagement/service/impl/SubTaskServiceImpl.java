@@ -148,6 +148,25 @@ public class SubTaskServiceImpl implements SubTaskService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<SubTaskResponse> listByAssistant(Long assistantId) {
+        Account assistant = accountRepository.findById(assistantId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Assistant account not found: " + assistantId));
+
+        if (!assistant.hasRole(SystemRoleName.ASSISTANT)) {
+            throw new AccessDeniedException(
+                    "Only accounts with the ASSISTANT role may use this endpoint");
+        }
+
+        return subTaskRepository
+                .findByAssigneeIdOrderByDeadlineDateAscDeadlineTimeAsc(assistantId)
+                .stream()
+                .map(SubTaskResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public SubTaskResponse getById(Long id, Long requesterId) {
         SubTask sub = subTaskRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("SubTask not found: " + id));

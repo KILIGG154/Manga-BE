@@ -28,6 +28,9 @@ import java.util.List;
  *   <li>{@code GET  /api/tasks/{taskId}/subtasks} – list SubTasks of a Task.</li>
  *   <li>{@code GET  /api/users/{userId}/subtasks} – SubTasks assigned to a user
  *       (Assistant dashboard).</li>
+ *   <li>{@code GET  /api/users/{userId}/subtasks/assigned} – SubTasks assigned
+ *       to the given Assistant, no {@code requesterId} required (the path
+ *       user id is assumed to be the caller).</li>
  *   <li>{@code GET  /api/subtasks/{subTaskId}} – fetch a single SubTask.</li>
  *   <li>{@code POST /api/subtasks/{subTaskId}/reopen} – reopen a COMPLETED SubTask.</li>
  * </ul>
@@ -86,6 +89,21 @@ public class SubTaskController {
                                                        @RequestParam Long requesterId) {
         try {
             List<SubTaskResponse> result = subTaskService.listByAssignee(userId, requesterId);
+            return ResponseEntity.ok(new ResponseBase(200, "SubTasks retrieved", result));
+        } catch (AccessDeniedException ad) {
+            return ResponseEntity.status(403).body(new ResponseBase(403, ad.getMessage(), null));
+        } catch (ResourceNotFoundException r) {
+            return ResponseEntity.status(404).body(new ResponseBase(404, r.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
+
+    @GetMapping("/api/users/{userId}/subtasks/assigned")
+    @Operation(summary = "List SubTasks assigned to the given Assistant (no requesterId required)")
+    public ResponseEntity<ResponseBase> listAssignedToAssistant(@PathVariable Long userId) {
+        try {
+            List<SubTaskResponse> result = subTaskService.listByAssistant(userId);
             return ResponseEntity.ok(new ResponseBase(200, "SubTasks retrieved", result));
         } catch (AccessDeniedException ad) {
             return ResponseEntity.status(403).body(new ResponseBase(403, ad.getMessage(), null));

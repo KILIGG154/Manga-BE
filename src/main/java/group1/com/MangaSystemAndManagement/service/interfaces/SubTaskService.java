@@ -22,6 +22,14 @@ public interface SubTaskService {
      */
     List<SubTaskResponse> listByAssignee(Long assigneeId, Long requesterId);
 
+    /**
+     * Convenience overload for the Assistant dashboard: the caller passes
+     * only their own {@code userId}. The service verifies the account exists
+     * and holds the {@code ASSISTANT} role before returning the list, so
+     * no separate {@code requesterId} is required.
+     */
+    List<SubTaskResponse> listByAssistant(Long assistantId);
+
     SubTaskResponse getById(Long id, Long requesterId);
 
     /**
