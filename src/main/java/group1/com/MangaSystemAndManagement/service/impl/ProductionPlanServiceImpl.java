@@ -44,14 +44,9 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
         ProductionPlan plan = new ProductionPlan();
         plan.setProject(project);
         plan.setMilestones(request.getMilestones());
-        plan.setSchedule(request.getSchedule());
         plan.setChapterTimeline(request.getChapterTimeline());
         plan.setDeadline(request.getDeadline());
-        plan.setResources(request.getResources());
-        plan.setBudget(request.getBudget());
-        plan.setAssistantAllocation(request.getAssistantAllocation());
         plan.setPriority(request.getPriority());
-        plan.setRisk(request.getRisk());
         plan.setPlanStatus(PlanStatus.IN_PROGRESS);
 
         return productionPlanRepository.save(plan);

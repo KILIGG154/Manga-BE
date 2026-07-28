@@ -17,15 +17,9 @@ public class ProductionPlanResponse {
     private Long projectId;
     private String projectTitle;
     private String milestones;
-    private String schedule;
     private String chapterTimeline;
     private Instant deadline;
-    private String resources;
-    private Double budget;
-    private String assistantAllocation;
     private String priority;
-    private String risk;
-    // Decision Log 2026-07-27 §AI-10: approvalStatus field removed from ProductionPlan entity.
     private LocalDate startDate;
     private LocalDate endDate;
     private Integer totalVolumeTarget;
@@ -42,14 +36,9 @@ public class ProductionPlanResponse {
             r.projectTitle = pp.getProject().getTitle();
         }
         r.milestones = pp.getMilestones();
-        r.schedule = pp.getSchedule();
         r.chapterTimeline = pp.getChapterTimeline();
         r.deadline = pp.getDeadline();
-        r.resources = pp.getResources();
-        r.budget = pp.getBudget();
-        r.assistantAllocation = pp.getAssistantAllocation();
         r.priority = pp.getPriority();
-        r.risk = pp.getRisk();
         r.startDate = pp.getStartDate();
         r.endDate = pp.getEndDate();
         r.totalVolumeTarget = pp.getTotalVolumeTarget();

@@ -96,9 +96,9 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         Project project = getProject(projectId);
         
         // Optionally verify if this Tantou is the owner of this project
-        if (project.getOwner() == null || project.getOwner().getId() != tantouId) {
-            throw new AccessDeniedException("You are not the assigned Tantou for this project");
-        }
+//        if (project.getOwner() == null || project.getOwner().getId() != tantouId) {
+//            throw new AccessDeniedException("You are not the assigned Tantou for this project");
+//        }
 
         if (req.getGenre() != null) {
             project.setGenre(req.getGenre());
@@ -197,7 +197,7 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
 
     @Override
     @Transactional
-    public ChapterWithTasksResponse createChapter(CreateChapterRequest req, Long requesterId) {
+    public ChapterResponse createChapter(CreateChapterRequest req, Long requesterId) {
         Account requester = getAccount(requesterId);
         if (!requester.hasRole(SystemRoleName.TANTOU_EDITOR)) {
             throw new AccessDeniedException("Only TANTOU can create chapters");
@@ -238,29 +238,15 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
 
         chapter = chapterRepository.save(chapter);
 
-        // Auto-Task Generation rule
-        TaskType[] defaultTasks = { TaskType.NAME_WIP, TaskType.LINEART, TaskType.INKING, TaskType.BACKGROUND };
-        for (TaskType type : defaultTasks) {
-            Task task = new Task();
-            task.setChapter(chapter);
-            task.setProductionTaskType(type);
-            task.setTaskWorkflowStatus(TaskWorkflowStatus.TODO);
-            task.setTitle(type.name() + " for Chapter " + chapter.getChapterNumber());
-            taskRepository.save(task);
-        }
-
-        ChapterWithTasksResponse response = new ChapterWithTasksResponse();
+        ChapterResponse response = new ChapterResponse();
         response.setId(chapter.getId());
         response.setChapterNumber(chapter.getChapterNumber());
         response.setTitle(chapter.getTitle());
         response.setTargetPageCount(chapter.getTargetPageCount());
         response.setPublishDate(chapter.getPublishDate());
         response.setChapterStatus(chapter.getChapterStatus());
-
-        List<Task> tasks = taskRepository.findByChapterId(chapter.getId());
-        response.setTasks(tasks.stream()
-                .map(this::mapToTaskWithSubTasksResponse)
-                .collect(Collectors.toList()));
+//        response.setStartDate(chapter.getStartDate());
+//        response.setEndDate(chapter.getEndDate());
 
         return response;
     }

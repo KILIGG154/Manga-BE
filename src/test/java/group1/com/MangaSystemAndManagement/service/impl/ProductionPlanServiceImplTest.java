@@ -86,7 +86,6 @@ class ProductionPlanServiceImplTest {
 
             ProductionPlanRequest req = new ProductionPlanRequest();
             req.setMilestones("M1");
-            req.setSchedule("S1");
             req.setChapterTimeline("C1");
 
             ProductionPlan saved = service.createProductionPlan(10L, req);

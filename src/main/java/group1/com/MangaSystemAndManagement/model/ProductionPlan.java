@@ -30,10 +30,6 @@ public class ProductionPlan {
     private String milestones;
 
     @Nationalized
-    @Column(name = "Schedule", columnDefinition = "nvarchar(max)")
-    private String schedule;
-
-    @Nationalized
     @Column(name = "ChapterTimeline", columnDefinition = "nvarchar(max)")
     private String chapterTimeline;
 
@@ -41,23 +37,8 @@ public class ProductionPlan {
     private Instant deadline;
 
     @Nationalized
-    @Column(name = "Resources", columnDefinition = "nvarchar(max)")
-    private String resources;
-
-    @Column(name = "Budget")
-    private Double budget;
-
-    @Nationalized
-    @Column(name = "AssistantAllocation", columnDefinition = "nvarchar(max)")
-    private String assistantAllocation;
-
-    @Nationalized
     @Column(name = "Priority", length = 50)
     private String priority;
-
-    @Nationalized
-    @Column(name = "Risk", columnDefinition = "nvarchar(max)")
-    private String risk;
 
     // Decision Log 2026-07-27 §AI-10: removed `approval_status` column.
     // Field used to be PlanApprovalStatus enum; replaced by planStatus flow.

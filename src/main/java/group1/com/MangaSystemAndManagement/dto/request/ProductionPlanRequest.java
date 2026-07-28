@@ -11,12 +11,7 @@ import java.time.Instant;
 @AllArgsConstructor
 public class ProductionPlanRequest {
     private String milestones;
-    private String schedule;
     private String chapterTimeline;
     private Instant deadline;
-    private String resources;
-    private Double budget;
-    private String assistantAllocation;
     private String priority;
-    private String risk;
 }

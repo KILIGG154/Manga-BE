@@ -18,7 +18,7 @@ public interface ProductionWorkflowService {
 
     PlanDashboardResponse getPlanDashboard(Long planId, Long requesterId);
 
-    ChapterWithTasksResponse createChapter(CreateChapterRequest req, Long requesterId);
+    ChapterResponse createChapter(CreateChapterRequest req, Long requesterId);
 
     ChapterWithTasksResponse updateChapterStatus(Long chapterId, group1.com.MangaSystemAndManagement.model.ChapterStatus status, Long requesterId);
 
