@@ -78,7 +78,8 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
         plan.setDeadlineDate(request.getDeadlineDate());
         plan.setPublishDate(request.getPublishDate());
         plan.setCreatedBy(requester.getId());
-        plan.setPlanStatus(deriveInitialStatus(request.getStartDate(), LocalDate.now()));
+//        plan.setPlanStatus(deriveInitialStatus(request.getStartDate(), LocalDate.now()));
+        plan.setPlanStatus(PlanStatus.ACTIVE);
 
         return productionPlanRepository.save(plan);
     }
