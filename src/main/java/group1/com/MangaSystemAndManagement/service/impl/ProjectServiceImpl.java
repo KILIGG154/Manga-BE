@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -146,15 +147,15 @@ public class ProjectServiceImpl implements ProjectService {
         project.setStatus("CANCELLED");
         Project saved = repository.save(project);
 
-        // Cascade Plan -> CANCELLED.
-        productionPlanRepository.findByProjectId(projectId).ifPresent(plan -> {
-            if (plan.getPlanStatus() != PlanStatus.COMPLETED) {
-                plan.setPlanStatus(PlanStatus.CANCELLED);
-                plan.setPauseReason("Project cancelled: " + reason);
-                plan.setPausedAt(Instant.now());
-                productionPlanRepository.save(plan);
-            }
-        });
+        // Cascade all Plans -> COMPLETED.
+        productionPlanRepository.findByProjectIdOrderByStartDateDesc(projectId)
+                .forEach(plan -> {
+                    if (plan.getPlanStatus() != PlanStatus.COMPLETED) {
+                        plan.setPlanStatus(PlanStatus.COMPLETED);
+                        plan.setActualEndDate(LocalDate.now());
+                        productionPlanRepository.save(plan);
+                    }
+                });
 
         // Lock non-PUBLISHED chapters so further writes are refused. PUBLISHED chapters
         // remain public for historical record.

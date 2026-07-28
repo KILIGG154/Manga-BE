@@ -1,10 +1,11 @@
 package group1.com.MangaSystemAndManagement.dto.request;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import group1.com.MangaSystemAndManagement.model.ChapterStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.time.LocalDate;
 
 @Getter
@@ -19,7 +20,8 @@ public class CreateChapterRequest {
 
     private String title;
 
-    private String status;
+    @NotNull(message = "Chapter status is required")
+    private ChapterStatus chapterStatus;
 
     private Integer targetPageCount;
 
@@ -29,8 +31,7 @@ public class CreateChapterRequest {
 
     private LocalDate publishDate;
 
-    @JsonProperty("productionPlanId")
-    public void setProductionPlanId(Long productionPlanId) {
-        this.planId = productionPlanId;
-    }
+    private Instant deadline;
+
+    private String priority;
 }

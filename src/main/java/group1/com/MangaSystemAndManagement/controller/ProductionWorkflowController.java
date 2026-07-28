@@ -109,8 +109,26 @@ public class ProductionWorkflowController {
         }
     }
 
+    @PostMapping("/chapters/{chapterId}/tasks")
+    @Operation(
+            summary = "Manually create a Task under a Chapter",
+            description = "Spec v2.1 §AI-MT-01. Allowed: MANGAKA who is the chapter's assignee. " +
+                    "Chapter must be IN_PRODUCTION and the plan not paused. " +
+                    "Task status defaults to TODO; assignee = requester.")
+    public ResponseEntity<ResponseBase> createManualTask(@PathVariable Long chapterId,
+                                                         @Valid @RequestBody CreateManualTaskRequest req) {
+        try {
+            var res = workflowService.createManualTask(chapterId, req);
+            return ResponseEntity.status(201).body(new ResponseBase(201, "Task created under chapter", res));
+        } catch (AccessDeniedException ad) {
+            return ResponseEntity.status(403).body(new ResponseBase(403, ad.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ResponseBase(400, e.getMessage(), null));
+        }
+    }
+
     @PostMapping("/chapters/{chapterId}/assign")
-    @Operation(summary = "Assign a Chapter to a Mangaka -> Auto-assigns all tasks in the chapter to the Mangaka")
+    @Operation(summary = "Assign a Chapter to a Mangaka. Sets chapter.assignee (owner stays as the Tantou who created the chapter).")
     public ResponseEntity<ResponseBase> assignChapter(@PathVariable Long chapterId, @Valid @RequestBody AssignChapterRequest req) {
         try {
             var res = workflowService.assignChapter(chapterId, req);

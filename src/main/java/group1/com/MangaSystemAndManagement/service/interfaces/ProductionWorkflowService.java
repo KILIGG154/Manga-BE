@@ -24,6 +24,14 @@ public interface ProductionWorkflowService {
 
     ChapterResponse assignChapter(Long chapterId, AssignChapterRequest req);
 
+    /**
+     * Spec v2.1 §AI-MT-01: Mangaka (chapter assignee) manually creates a Task under a Chapter.
+     * Allowed: MANGAKA who is the {@code assignee} of the chapter.
+     * The new Task defaults to status TODO, assignee = requester, and inherits the chapter's project/plan.
+     * If a deadline is supplied it must not exceed the parent Chapter's {@code endDate}.
+     */
+    TaskResponse createManualTask(Long chapterId, CreateManualTaskRequest req);
+
     TaskResponse updateTaskStatus(Long taskId, UpdateTaskStatusRequest req);
 
     FeedbackResponse createFeedback(Long taskId, CreateFeedbackRequest req);

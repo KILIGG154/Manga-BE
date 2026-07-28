@@ -61,6 +61,10 @@ public class Chapter {
     private Account owner;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "AssigneeId")
+    private Account assignee;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ProjectId")
     private Project project;
 

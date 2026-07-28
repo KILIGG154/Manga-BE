@@ -71,7 +71,7 @@ class ProjectServiceImplTest {
 
         ProductionPlan plan = new ProductionPlan();
         TestSupportBase.setField(plan, "id", PLAN_ID);
-        plan.setPlanStatus(PlanStatus.IN_PROGRESS);
+        plan.setPlanStatus(PlanStatus.ACTIVE);
         plan.setProject(project);
         when(productionPlanRepository.findByProjectId(PROJECT_ID)).thenReturn(Optional.of(plan));
         when(productionPlanRepository.save(any(ProductionPlan.class)))
@@ -84,8 +84,8 @@ class ProjectServiceImplTest {
         assertThat(result.getProjectWorkflowStatus()).isEqualTo(ProjectWorkflowStatus.CANCELLED);
         ArgumentCaptor<ProductionPlan> planCaptor = ArgumentCaptor.forClass(ProductionPlan.class);
         verify(productionPlanRepository).save(planCaptor.capture());
-        assertThat(planCaptor.getValue().getPlanStatus()).isEqualTo(PlanStatus.CANCELLED);
-        assertThat(planCaptor.getValue().getPauseReason()).contains("Hết budget");
+        assertThat(planCaptor.getValue().getPlanStatus()).isEqualTo(PlanStatus.COMPLETED);
+        assertThat(planCaptor.getValue().getActualEndDate()).isNotNull();
     }
 
     @Test

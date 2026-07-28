@@ -1,16 +1,18 @@
 package group1.com.MangaSystemAndManagement.service.impl;
 
 import group1.com.MangaSystemAndManagement.TestSupportBase;
-import group1.com.MangaSystemAndManagement.dto.request.ForceClosePlanRequest;
-import group1.com.MangaSystemAndManagement.dto.request.PausePlanRequest;
-import group1.com.MangaSystemAndManagement.dto.request.ProductionPlanRequest;
+import group1.com.MangaSystemAndManagement.dto.request.CreateProductionPlanRequest;
+import group1.com.MangaSystemAndManagement.dto.request.ExtendProductionPlanRequest;
 import group1.com.MangaSystemAndManagement.exception.ResourceNotFoundException;
 import group1.com.MangaSystemAndManagement.model.Account;
+import group1.com.MangaSystemAndManagement.model.ChapterStatus;
 import group1.com.MangaSystemAndManagement.model.PlanStatus;
 import group1.com.MangaSystemAndManagement.model.ProductionPlan;
 import group1.com.MangaSystemAndManagement.model.Project;
 import group1.com.MangaSystemAndManagement.model.SystemRoleName;
 import group1.com.MangaSystemAndManagement.repository.AccountRepository;
+import group1.com.MangaSystemAndManagement.repository.ChapterRepository;
+import group1.com.MangaSystemAndManagement.repository.PlanExtensionLogRepository;
 import group1.com.MangaSystemAndManagement.repository.ProductionPlanRepository;
 import group1.com.MangaSystemAndManagement.repository.ProjectRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +26,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,7 +38,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Sprint 1 + 3 — ProductionPlanService unit tests (BA V3 §1, §2.1, §2.2).
+ * Unit tests aligned with Technical Spec v2.1 §4.
  */
 @ExtendWith(MockitoExtension.class)
 class ProductionPlanServiceImplTest {
@@ -42,17 +46,18 @@ class ProductionPlanServiceImplTest {
     @Mock ProductionPlanRepository productionPlanRepository;
     @Mock ProjectRepository projectRepository;
     @Mock AccountRepository accountRepository;
+    @Mock ChapterRepository chapterRepository;
+    @Mock PlanExtensionLogRepository planExtensionLogRepository;
 
     @InjectMocks ProductionPlanServiceImpl service;
 
     private static final long TANTOU_ID = 100L;
     private static final long LEADER_ID = 200L;
-    private static final long BOARD_ID = 300L;
     private static final long PLAN_ID = 1L;
+    private static final long PROJECT_ID = 10L;
 
     private Account tantou;
     private Account leader;
-    private Account board;
     private Project project;
     private ProductionPlan plan;
 
@@ -60,188 +65,270 @@ class ProductionPlanServiceImplTest {
     void setUp() {
         tantou = TestSupportBase.accountWithRole(TANTOU_ID, SystemRoleName.TANTOU_EDITOR);
         leader = TestSupportBase.accountWithRole(LEADER_ID, SystemRoleName.LEADER_BOARD);
-        board  = TestSupportBase.accountWithRole(BOARD_ID,  SystemRoleName.EDITORIAL_BOARD_MEMBER);
 
         project = new Project();
-        TestSupportBase.setField(project, "id", 10L);
+        TestSupportBase.setField(project, "id", PROJECT_ID);
+        project.setTitle("Project X");
 
         plan = new ProductionPlan();
         plan.setProject(project);
-        plan.setPlanStatus(PlanStatus.IN_PROGRESS);
+        plan.setTitle("Project X - Production Plan 07/2026");
+        plan.setStartDate(LocalDate.now().minusDays(5));
+        plan.setEndDate(LocalDate.now().plusDays(20));
+        plan.setDeadlineDate(LocalDate.now().plusDays(25));
+        plan.setPublishDate(LocalDate.now().plusDays(30));
         TestSupportBase.setField(plan, "id", PLAN_ID);
     }
 
-    // ---- 1.1 createProductionPlan: must default to IN_PROGRESS ----
+    // ---- §4.1 createProductionPlan ----
 
     @Nested
-    @DisplayName("createProductionPlan (BA V3 §1)")
+    @DisplayName("createProductionPlan (Spec v2.1 §4.1)")
     class CreateTests {
 
         @Test
-        @DisplayName("BA V3 §1: Plan defaults to IN_PROGRESS; no more pre-approval PENDING")
-        void createsPlanInProgressWithoutPending() {
-            when(projectRepository.findById(10L)).thenReturn(Optional.of(project));
+        @DisplayName("BR-02: startDate <= today → status = ACTIVE")
+        void activeWhenStartInPast() {
+            when(accountRepository.findById(TANTOU_ID)).thenReturn(Optional.of(tantou));
+            when(projectRepository.findById(PROJECT_ID)).thenReturn(Optional.of(project));
+            when(productionPlanRepository.existsByProjectIdAndTitle(PROJECT_ID, "P1")).thenReturn(false);
             when(productionPlanRepository.save(any(ProductionPlan.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
 
-            ProductionPlanRequest req = new ProductionPlanRequest();
-            req.setMilestones("M1");
-            req.setChapterTimeline("C1");
+            CreateProductionPlanRequest req = new CreateProductionPlanRequest();
+            req.setTitle("P1");
+            req.setStartDate(LocalDate.now().minusDays(1));
+            req.setEndDate(LocalDate.now().plusDays(20));
+            req.setDeadlineDate(LocalDate.now().plusDays(25));
+            req.setPublishDate(LocalDate.now().plusDays(30));
 
-            ProductionPlan saved = service.createProductionPlan(10L, req);
+            ProductionPlan result = service.createProductionPlan(PROJECT_ID, TANTOU_ID, req);
 
-            ArgumentCaptor<ProductionPlan> captor = ArgumentCaptor.forClass(ProductionPlan.class);
-            verify(productionPlanRepository).save(captor.capture());
-            ProductionPlan written = captor.getValue();
-
-            assertThat(written.getPlanStatus()).isEqualTo(PlanStatus.IN_PROGRESS);
-            // Decision Log 2026-07-27 §AI-10: approvalStatus removed.
-            assertThat(saved.getPlanStatus()).isEqualTo(PlanStatus.IN_PROGRESS);
+            assertThat(result.getPlanStatus()).isEqualTo(PlanStatus.ACTIVE);
+            assertThat(result.getCreatedBy()).isEqualTo(TANTOU_ID);
         }
 
         @Test
-        @DisplayName("Project not found -> RuntimeException")
-        void failsWhenProjectMissing() {
-            when(projectRepository.findById(99L)).thenReturn(Optional.empty());
+        @DisplayName("BR-02: startDate > today → status = DRAFT")
+        void draftWhenStartInFuture() {
+            when(accountRepository.findById(TANTOU_ID)).thenReturn(Optional.of(tantou));
+            when(projectRepository.findById(PROJECT_ID)).thenReturn(Optional.of(project));
+            when(productionPlanRepository.existsByProjectIdAndTitle(PROJECT_ID, "Future")).thenReturn(false);
+            when(productionPlanRepository.save(any(ProductionPlan.class)))
+                    .thenAnswer(inv -> inv.getArgument(0));
 
-            assertThatThrownBy(() -> service.createProductionPlan(99L, new ProductionPlanRequest()))
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessageContaining("Project not found");
+            CreateProductionPlanRequest req = new CreateProductionPlanRequest();
+            req.setTitle("Future");
+            req.setStartDate(LocalDate.now().plusDays(10));
+            req.setEndDate(LocalDate.now().plusDays(40));
+            req.setDeadlineDate(LocalDate.now().plusDays(45));
+            req.setPublishDate(LocalDate.now().plusDays(50));
 
-            verify(productionPlanRepository, never()).save(any());
+            ProductionPlan result = service.createProductionPlan(PROJECT_ID, TANTOU_ID, req);
+
+            assertThat(result.getPlanStatus()).isEqualTo(PlanStatus.DRAFT);
+        }
+
+        @Test
+        @DisplayName("BR-01: less than 20 days duration → IllegalArgumentException")
+        void rejectsTooShortDuration() {
+            when(accountRepository.findById(TANTOU_ID)).thenReturn(Optional.of(tantou));
+            when(projectRepository.findById(PROJECT_ID)).thenReturn(Optional.of(project));
+
+            CreateProductionPlanRequest req = new CreateProductionPlanRequest();
+            req.setTitle("Short");
+            req.setStartDate(LocalDate.now());
+            req.setEndDate(LocalDate.now().plusDays(10));
+            req.setDeadlineDate(LocalDate.now().plusDays(15));
+            req.setPublishDate(LocalDate.now().plusDays(20));
+
+            assertThatThrownBy(() -> service.createProductionPlan(PROJECT_ID, TANTOU_ID, req))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("20 ngày");
+        }
+
+        @Test
+        @DisplayName("BR-03: duplicate (project, title) → IllegalArgumentException")
+        void rejectsDuplicateTitle() {
+            when(accountRepository.findById(TANTOU_ID)).thenReturn(Optional.of(tantou));
+            when(projectRepository.findById(PROJECT_ID)).thenReturn(Optional.of(project));
+            when(productionPlanRepository.existsByProjectIdAndTitle(PROJECT_ID, "Dup")).thenReturn(true);
+
+            CreateProductionPlanRequest req = new CreateProductionPlanRequest();
+            req.setTitle("Dup");
+            req.setStartDate(LocalDate.now());
+            req.setEndDate(LocalDate.now().plusDays(25));
+            req.setDeadlineDate(LocalDate.now().plusDays(30));
+            req.setPublishDate(LocalDate.now().plusDays(35));
+
+            assertThatThrownBy(() -> service.createProductionPlan(PROJECT_ID, TANTOU_ID, req))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("tồn tại");
         }
     }
 
-    // ---- 1.2 pause / resume ----
+    // ---- §4.2 extendProductionPlan ----
 
     @Nested
-    @DisplayName("pausePlan / resumePlan (BA V3 §2.2)")
-    class PauseResumeTests {
+    @DisplayName("extendProductionPlan (Spec v2.1 §4.2)")
+    class ExtendTests {
 
         @Test
-        @DisplayName("Tantou can pause; reason persisted; status -> PAUSED")
-        void tantouCanPause() {
+        @DisplayName("Tantou can extend an ACTIVE plan; status -> EXTENDED + log created")
+        void extendsActivePlan() {
+            plan.setPlanStatus(PlanStatus.ACTIVE);
             when(accountRepository.findById(TANTOU_ID)).thenReturn(Optional.of(tantou));
             when(productionPlanRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
             when(productionPlanRepository.save(any(ProductionPlan.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
+            when(planExtensionLogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            PausePlanRequest req = new PausePlanRequest();
-            req.setReason("Thiếu nhân sự tháng 7");
+            ExtendProductionPlanRequest req = new ExtendProductionPlanRequest();
+            req.setNewEndDate(LocalDate.now().plusDays(45));
+            req.setReasonCode("RESOURCE_SHORTAGE");
 
-            ProductionPlan result = service.pausePlan(PLAN_ID, TANTOU_ID, req);
+            ProductionPlan result = service.extendProductionPlan(PLAN_ID, TANTOU_ID, req);
 
-            assertThat(result.getPlanStatus()).isEqualTo(PlanStatus.PAUSED);
-            assertThat(result.getPauseReason()).isEqualTo("Thiếu nhân sự tháng 7");
-            assertThat(result.getPausedBy()).isEqualTo(TANTOU_ID);
-            assertThat(result.getPausedAt()).isNotNull();
+            assertThat(result.getPlanStatus()).isEqualTo(PlanStatus.EXTENDED);
+            assertThat(result.getEndDate()).isEqualTo(LocalDate.now().plusDays(45));
+
+            ArgumentCaptor<group1.com.MangaSystemAndManagement.model.PlanExtensionLog> captor =
+                    ArgumentCaptor.forClass(group1.com.MangaSystemAndManagement.model.PlanExtensionLog.class);
+            verify(planExtensionLogRepository).save(captor.capture());
+            assertThat(captor.getValue().getReasonCode()).isEqualTo("RESOURCE_SHORTAGE");
         }
 
         @Test
-        @DisplayName("Resume resets pause fields; status -> IN_PROGRESS")
-        void resumeClearsPause() {
-            plan.setPlanStatus(PlanStatus.PAUSED);
-            plan.setPausedBy(TANTOU_ID);
-            plan.setPauseReason("Old reason");
-
-            when(accountRepository.findById(LEADER_ID)).thenReturn(Optional.of(leader));
-            when(productionPlanRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
-            when(productionPlanRepository.save(any(ProductionPlan.class)))
-                    .thenAnswer(inv -> inv.getArgument(0));
-
-            ProductionPlan result = service.resumePlan(PLAN_ID, LEADER_ID);
-
-            assertThat(result.getPlanStatus()).isEqualTo(PlanStatus.IN_PROGRESS);
-            assertThat(result.getPausedBy()).isNull();
-            assertThat(result.getPausedAt()).isNull();
-            assertThat(result.getPauseReason()).isNull();
-        }
-
-        @Test
-        @DisplayName("Cannot pause a COMPLETED plan")
-        void cannotPauseTerminalPlan() {
-            plan.setPlanStatus(PlanStatus.COMPLETED);
-            when(accountRepository.findById(BOARD_ID)).thenReturn(Optional.of(board));
+        @DisplayName("Cannot extend a DRAFT plan")
+        void rejectsDraftPlan() {
+            plan.setPlanStatus(PlanStatus.DRAFT);
+            when(accountRepository.findById(TANTOU_ID)).thenReturn(Optional.of(tantou));
             when(productionPlanRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
 
-            assertThatThrownBy(() ->
-                    service.pausePlan(PLAN_ID, BOARD_ID, new PausePlanRequest() {{ setReason("x"); }}))
+            ExtendProductionPlanRequest req = new ExtendProductionPlanRequest();
+            req.setNewEndDate(LocalDate.now().plusDays(60));
+            req.setReasonCode("OTHER");
+
+            assertThatThrownBy(() -> service.extendProductionPlan(PLAN_ID, TANTOU_ID, req))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("terminal");
+                    .hasMessageContaining("DRAFT");
         }
 
         @Test
-        @DisplayName("Resume on non-PAUSED throws IllegalStateException")
-        void resumeOnlyFromPaused() {
-            plan.setPlanStatus(PlanStatus.IN_PROGRESS);
-            when(accountRepository.findById(LEADER_ID)).thenReturn(Optional.of(leader));
+        @DisplayName("newEndDate must be > current endDate")
+        void rejectsEarlierEndDate() {
+            plan.setPlanStatus(PlanStatus.ACTIVE);
+            when(accountRepository.findById(TANTOU_ID)).thenReturn(Optional.of(tantou));
             when(productionPlanRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
 
-            assertThatThrownBy(() -> service.resumePlan(PLAN_ID, LEADER_ID))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("Only PAUSED plans can be resumed");
-        }
+            ExtendProductionPlanRequest req = new ExtendProductionPlanRequest();
+            req.setNewEndDate(plan.getEndDate().minusDays(1));
+            req.setReasonCode("OTHER");
 
-        @Test
-        @DisplayName("Assistant (no permission) cannot pause -> AccessDenied")
-        void assistantCannotPause() {
-            Account assistant = TestSupportBase.accountWithRole(500L, SystemRoleName.ASSISTANT);
-            when(accountRepository.findById(500L)).thenReturn(Optional.of(assistant));
-
-            assertThatThrownBy(() ->
-                    service.pausePlan(PLAN_ID, 500L, new PausePlanRequest() {{ setReason("x"); }}))
-                    .isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> service.extendProductionPlan(PLAN_ID, TANTOU_ID, req))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("lớn hơn");
         }
     }
 
-    // ---- 1.3 force-close ----
+    // ---- §4.3 completeProductionPlan ----
 
     @Nested
-    @DisplayName("forceClosePlan (BA V3 §2.1)")
-    class ForceCloseTests {
+    @DisplayName("completeProductionPlan (Spec v2.1 §4.3)")
+    class CompleteTests {
 
         @Test
-        @DisplayName("Leader can force-close a PAUSED plan with reason")
-        void leaderCanForceClose() {
-            plan.setPlanStatus(PlanStatus.PAUSED);
-            plan.setPauseReason("old reason");
-            when(accountRepository.findById(LEADER_ID)).thenReturn(Optional.of(leader));
+        @DisplayName("BR-05: blocks when any chapter is not PUBLISHED")
+        void blocksWhenChaptersIncomplete() {
+            plan.setPlanStatus(PlanStatus.ACTIVE);
+            when(accountRepository.findById(TANTOU_ID)).thenReturn(Optional.of(tantou));
             when(productionPlanRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
+            when(chapterRepository.countByProductionPlanIdAndChapterStatusNot(PLAN_ID, ChapterStatus.PUBLISHED))
+                    .thenReturn(2L);
+
+            assertThatThrownBy(() -> service.completeProductionPlan(PLAN_ID, TANTOU_ID))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("2");
+        }
+
+        @Test
+        @DisplayName("100% chapters PUBLISHED → COMPLETED + actualEndDate")
+        void completesWhenAllPublished() {
+            plan.setPlanStatus(PlanStatus.ACTIVE);
+            when(accountRepository.findById(TANTOU_ID)).thenReturn(Optional.of(tantou));
+            when(productionPlanRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
+            when(chapterRepository.countByProductionPlanIdAndChapterStatusNot(PLAN_ID, ChapterStatus.PUBLISHED))
+                    .thenReturn(0L);
             when(productionPlanRepository.save(any(ProductionPlan.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
 
-            ForceClosePlanRequest req = new ForceClosePlanRequest();
-            req.setReason("Hết budget");
-
-            ProductionPlan result = service.forceClosePlan(PLAN_ID, LEADER_ID, req);
+            ProductionPlan result = service.completeProductionPlan(PLAN_ID, TANTOU_ID);
 
             assertThat(result.getPlanStatus()).isEqualTo(PlanStatus.COMPLETED);
-            assertThat(result.getPauseReason()).isEqualTo("Hết budget");
+            assertThat(result.getActualEndDate()).isEqualTo(LocalDate.now());
+        }
+    }
+
+    // ---- §5 scheduled jobs ----
+
+    @Nested
+    @DisplayName("Scheduler jobs (Spec v2.1 §5)")
+    class SchedulerTests {
+
+        @Test
+        @DisplayName("promoteDraftPlansToActive flips DRAFT → ACTIVE")
+        void promotesDrafts() {
+            ProductionPlan p = new ProductionPlan();
+            TestSupportBase.setField(p, "id", 7L);
+            p.setPlanStatus(PlanStatus.DRAFT);
+
+            when(productionPlanRepository.findByPlanStatusAndStartDateLessThanEqual(
+                    PlanStatus.DRAFT, LocalDate.now())).thenReturn(List.of(p));
+
+            int n = service.promoteDraftPlansToActive(LocalDate.now());
+            assertThat(n).isEqualTo(1);
+            assertThat(p.getPlanStatus()).isEqualTo(PlanStatus.ACTIVE);
         }
 
         @Test
-        @DisplayName("Cannot force-close from DRAFT-ish (PLANNING no longer exists) or CANCELLED")
-        void cannotForceCloseFromCancelled() {
-            plan.setPlanStatus(PlanStatus.CANCELLED);
-            when(accountRepository.findById(LEADER_ID)).thenReturn(Optional.of(leader));
-            when(productionPlanRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
+        @DisplayName("markOverduePlans flips ACTIVE/EXTENDED → OVERDUE")
+        void marksOverdue() {
+            ProductionPlan p = new ProductionPlan();
+            TestSupportBase.setField(p, "id", 8L);
+            p.setPlanStatus(PlanStatus.ACTIVE);
 
-            ForceClosePlanRequest req = new ForceClosePlanRequest();
-            req.setReason("test");
+            when(productionPlanRepository.findByPlanStatusInAndEndDateBefore(
+                    java.util.EnumSet.of(PlanStatus.ACTIVE, PlanStatus.EXTENDED), LocalDate.now()))
+                    .thenReturn(List.of(p));
 
-            assertThatThrownBy(() -> service.forceClosePlan(PLAN_ID, LEADER_ID, req))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("Force-close");
+            int n = service.markOverduePlans(LocalDate.now());
+            assertThat(n).isEqualTo(1);
+            assertThat(p.getPlanStatus()).isEqualTo(PlanStatus.OVERDUE);
         }
+    }
 
-        @Test
-        @DisplayName("Tantou cannot force-close (only Leader/Board)")
-        void tantouCannotForceClose() {
-            when(accountRepository.findById(TANTOU_ID)).thenReturn(Optional.of(tantou));
+    // ---- auth helpers ----
 
-            assertThatThrownBy(() ->
-                    service.forceClosePlan(PLAN_ID, TANTOU_ID, new ForceClosePlanRequest() {{ setReason("x"); }}))
-                    .isInstanceOf(AccessDeniedException.class);
-        }
+    @Test
+    @DisplayName("Account not found → ResourceNotFoundException")
+    void rejectsMissingAccount() {
+        when(accountRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                service.completeProductionPlan(PLAN_ID, 999L))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("Assistant cannot complete → AccessDenied")
+    void assistantCannotComplete() {
+        Account assistant = TestSupportBase.accountWithRole(500L, SystemRoleName.ASSISTANT);
+        when(accountRepository.findById(500L)).thenReturn(Optional.of(assistant));
+
+        assertThatThrownBy(() ->
+                service.completeProductionPlan(PLAN_ID, 500L))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(productionPlanRepository, never()).save(any());
     }
 }

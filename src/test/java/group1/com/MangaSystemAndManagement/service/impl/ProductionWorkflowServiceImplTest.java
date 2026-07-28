@@ -90,7 +90,7 @@ class ProductionWorkflowServiceImplTest {
         plan = new ProductionPlan();
         TestSupportBase.setField(plan, "id", PLAN_ID);
         plan.setProject(project);
-        plan.setPlanStatus(PlanStatus.IN_PROGRESS);
+        plan.setPlanStatus(PlanStatus.ACTIVE);
 
         publishedChapter = new Chapter();
         TestSupportBase.setField(publishedChapter, "id", CHAPTER_ID);
@@ -195,7 +195,7 @@ class ProductionWorkflowServiceImplTest {
             assertThat(publishedChapter.getRecallReason()).contains("Trang 12 lỗi bố cục");
             // AI-04: Tasks stay DONE — Tantou now calls markTaskRevision explicitly.
             assertThat(doneTask.getTaskWorkflowStatus()).isEqualTo(TaskWorkflowStatus.DONE);
-            assertThat(plan.getPlanStatus()).isEqualTo(PlanStatus.IN_PROGRESS);
+            assertThat(plan.getPlanStatus()).isEqualTo(PlanStatus.ACTIVE);
         }
 
         @Test
@@ -234,7 +234,7 @@ class ProductionWorkflowServiceImplTest {
 
             ArgumentCaptor<ProductionPlan> planCaptor = ArgumentCaptor.forClass(ProductionPlan.class);
             verify(productionPlanRepository, times(1)).save(planCaptor.capture());
-            assertThat(planCaptor.getValue().getPlanStatus()).isEqualTo(PlanStatus.IN_PROGRESS);
+            assertThat(planCaptor.getValue().getPlanStatus()).isEqualTo(PlanStatus.ACTIVE);
         }
 
         @Test
@@ -399,10 +399,10 @@ class ProductionWorkflowServiceImplTest {
     class FreezeTests {
 
         @Test
-        @DisplayName("createChapter with PAUSED plan throws IllegalStateException")
-        void createChapterPaused() {
+        @DisplayName("createChapter with COMPLETED plan throws IllegalStateException")
+        void createChapterCompletedPlan() {
             Account tantou = TestSupportBase.accountWithRole(777L, SystemRoleName.TANTOU_EDITOR);
-            plan.setPlanStatus(PlanStatus.PAUSED);
+            plan.setPlanStatus(PlanStatus.COMPLETED);
             group1.com.MangaSystemAndManagement.dto.request.CreateChapterRequest req =
                     new group1.com.MangaSystemAndManagement.dto.request.CreateChapterRequest();
             req.setPlanId(PLAN_ID);
@@ -414,7 +414,7 @@ class ProductionWorkflowServiceImplTest {
 
             assertThatThrownBy(() -> service.createChapter(req, 777L))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("PAUSED");
+                    .hasMessageContaining("COMPLETED");
             verify(chapterRepository, never()).save(any());
         }
 
@@ -422,7 +422,7 @@ class ProductionWorkflowServiceImplTest {
         @DisplayName("createChapter with CANCELLED Project throws IllegalStateException")
         void createChapterCancelledProject() {
             Account tantou = TestSupportBase.accountWithRole(778L, SystemRoleName.TANTOU_EDITOR);
-            plan.setPlanStatus(PlanStatus.IN_PROGRESS);
+            plan.setPlanStatus(PlanStatus.ACTIVE);
             project.setProjectWorkflowStatus(ProjectWorkflowStatus.CANCELLED);
             group1.com.MangaSystemAndManagement.dto.request.CreateChapterRequest req =
                     new group1.com.MangaSystemAndManagement.dto.request.CreateChapterRequest();
@@ -692,18 +692,26 @@ class ProductionWorkflowServiceImplTest {
     class IsActiveTests {
 
         @Test
-        @DisplayName("IN_PROGRESS plan is active")
-        void inProgressIsActive() {
+        @DisplayName("ACTIVE plan is active")
+        void activeIsActive() {
             ProductionPlan p = new ProductionPlan();
-            p.setPlanStatus(PlanStatus.IN_PROGRESS);
+            p.setPlanStatus(PlanStatus.ACTIVE);
             assertThat(p.isActive()).isTrue();
         }
 
         @Test
-        @DisplayName("PAUSED plan is active (still queryable, just mutations blocked)")
-        void pausedIsActive() {
+        @DisplayName("EXTENDED plan is active")
+        void extendedIsActive() {
             ProductionPlan p = new ProductionPlan();
-            p.setPlanStatus(PlanStatus.PAUSED);
+            p.setPlanStatus(PlanStatus.EXTENDED);
+            assertThat(p.isActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("OVERDUE plan is still active (can be extended)")
+        void overdueIsActive() {
+            ProductionPlan p = new ProductionPlan();
+            p.setPlanStatus(PlanStatus.OVERDUE);
             assertThat(p.isActive()).isTrue();
         }
 
@@ -716,10 +724,10 @@ class ProductionWorkflowServiceImplTest {
         }
 
         @Test
-        @DisplayName("CANCELLED plan is not active")
-        void cancelledIsNotActive() {
+        @DisplayName("DRAFT plan is not active (until start date)")
+        void draftIsNotActive() {
             ProductionPlan p = new ProductionPlan();
-            p.setPlanStatus(PlanStatus.CANCELLED);
+            p.setPlanStatus(PlanStatus.DRAFT);
             assertThat(p.isActive()).isFalse();
         }
     }

@@ -15,6 +15,7 @@ import java.util.List;
 @Entity
 @Table(name = "ProductionPlan")
 public class ProductionPlan {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "Id", nullable = false)
@@ -26,25 +27,8 @@ public class ProductionPlan {
     private Project project;
 
     @Nationalized
-    @Column(name = "Milestones", columnDefinition = "nvarchar(max)")
-    private String milestones;
-
-    @Nationalized
-    @Column(name = "ChapterTimeline", columnDefinition = "nvarchar(max)")
-    private String chapterTimeline;
-
-    @Column(name = "Deadline")
-    private Instant deadline;
-
-    @Nationalized
-    @Column(name = "Priority", length = 50)
-    private String priority;
-
-    // Decision Log 2026-07-27 §AI-10: removed `approval_status` column.
-    // Field used to be PlanApprovalStatus enum; replaced by planStatus flow.
-    // Migration: V2026_07_27__drop_production_plan_approval_status_column.
-
-    // --- Production Workflow Fields ---
+    @Column(name = "title", length = 255, nullable = false)
+    private String title;
 
     @Column(name = "start_date")
     private LocalDate startDate;
@@ -52,59 +36,55 @@ public class ProductionPlan {
     @Column(name = "end_date")
     private LocalDate endDate;
 
+    @Column(name = "deadline_date")
+    private LocalDate deadlineDate;
+
+    @Column(name = "publish_date")
+    private LocalDate publishDate;
+
+    @Column(name = "actual_end_date")
+    private LocalDate actualEndDate;
+
     @Column(name = "total_volume_target")
-    /**
-     * Decision Log 2026-07-27 §AI-03: targetChapterCount (called {@code total_volume_target}
-     * in DB) is treated as a DASHBOARD measurement only — it does NOT hard-block
-     * auto-complete of the ProductionPlan. Auto-complete runs as soon as every existing
-     * chapter of the Plan is PUBLISHED (dynamic).
-     */
     private Integer totalVolumeTarget;
 
-    // Note: @Converter(autoApply = true) in PlanStatusConverter handles DB mapping.
-    // No @Enumerated needed — avoids double conversion.
     @Column(name = "plan_status", length = 50)
-    private PlanStatus planStatus = PlanStatus.IN_PROGRESS;
+    private PlanStatus planStatus = PlanStatus.DRAFT;
 
-    /**
-     * Rolled-up completion across all chapters of this Plan (0–100).
-     * Recomputed every time a chapter transitions to COMPLETED/PUBLISHED.
-     */
     @Column(name = "completion_percentage")
     private Integer completionPercentage = 0;
 
-    // --- Pause / Resume fields (BA V3 §2.2) ---
+    @Column(name = "created_by")
+    private Long createdBy;
 
-    /** User ID who paused the plan; null when not paused. */
-    @Column(name = "paused_by")
-    private Long pausedBy;
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
 
-    /** Timestamp when the plan was last paused; null when not paused. */
-    @Column(name = "paused_at")
-    private Instant pausedAt;
-
-    /** Reason for the most recent pause; reset to NULL on Resume. */
-    @Nationalized
-    @Column(name = "pause_reason", columnDefinition = "nvarchar(max)")
-    private String pauseReason;
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
     @OneToMany(mappedBy = "productionPlan", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Chapter> chapters;
 
-    // --- Decision Log 2026-07-27 §AI-05: Comments (dùng khi plan PAUSED) ---
-
     @OneToMany(mappedBy = "productionPlan", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PlanComment> comments;
 
-    // --- Decision Log 2026-07-27 §AI-11: helper ---
+    @PrePersist
+    void onCreate() {
+        Instant now = Instant.now();
+        if (createdAt == null) createdAt = now;
+        updatedAt = now;
+        if (planStatus == null) planStatus = PlanStatus.DRAFT;
+    }
 
-    /**
-     * Returns {@code true} when the Plan is in a state where chapters/tasks can be
-     * actively produced — i.e. {@link PlanStatus#IN_PROGRESS} or {@link PlanStatus#PAUSED}.
-     * PAUSED is still "active" in the sense that the Plan exists and is open; mutations
-     * are blocked by {@code assertPlanNotPaused} but the dashboard keeps showing it.
-     */
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = Instant.now();
+    }
+
     public boolean isActive() {
-        return planStatus == PlanStatus.IN_PROGRESS || planStatus == PlanStatus.PAUSED;
+        return planStatus == PlanStatus.ACTIVE
+                || planStatus == PlanStatus.EXTENDED
+                || planStatus == PlanStatus.OVERDUE;
     }
 }

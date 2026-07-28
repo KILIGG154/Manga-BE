@@ -29,4 +29,7 @@ public interface ChapterRepository extends JpaRepository<Chapter, Long> {
      * {@code today}. Used by the auto-publish job to flip SCHEDULED → PUBLISHED.
      */
     List<Chapter> findByChapterStatusAndPublishDateLessThanEqual(ChapterStatus status, LocalDate today);
+
+    /** Technical Spec v2.1 §4.3 (BR-05): chapters of a plan that are NOT in the given status. */
+    long countByProductionPlanIdAndChapterStatusNot(Long productionPlanId, ChapterStatus status);
 }

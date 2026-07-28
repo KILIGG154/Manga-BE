@@ -16,16 +16,20 @@ public class ProductionPlanResponse {
     private Long id;
     private Long projectId;
     private String projectTitle;
-    private String milestones;
-    private String chapterTimeline;
-    private Instant deadline;
-    private String priority;
+    private String title;
     private LocalDate startDate;
     private LocalDate endDate;
+    private LocalDate deadlineDate;
+    private LocalDate publishDate;
+    private LocalDate actualEndDate;
     private Integer totalVolumeTarget;
     private PlanStatus planStatus;
     private Integer completionPercentage;
+    private Long createdBy;
+    private Instant createdAt;
+    private Instant updatedAt;
     private List<ChapterResponse> chapters;
+    private List<PlanExtensionLogResponse> extensionLogs;
 
     public static ProductionPlanResponse from(ProductionPlan pp) {
         if (pp == null) return null;
@@ -35,15 +39,18 @@ public class ProductionPlanResponse {
             r.projectId = pp.getProject().getId();
             r.projectTitle = pp.getProject().getTitle();
         }
-        r.milestones = pp.getMilestones();
-        r.chapterTimeline = pp.getChapterTimeline();
-        r.deadline = pp.getDeadline();
-        r.priority = pp.getPriority();
+        r.title = pp.getTitle();
         r.startDate = pp.getStartDate();
         r.endDate = pp.getEndDate();
+        r.deadlineDate = pp.getDeadlineDate();
+        r.publishDate = pp.getPublishDate();
+        r.actualEndDate = pp.getActualEndDate();
         r.totalVolumeTarget = pp.getTotalVolumeTarget();
         r.planStatus = pp.getPlanStatus();
         r.completionPercentage = pp.getCompletionPercentage();
+        r.createdBy = pp.getCreatedBy();
+        r.createdAt = pp.getCreatedAt();
+        r.updatedAt = pp.getUpdatedAt();
         if (pp.getChapters() != null) {
             r.chapters = pp.getChapters().stream()
                     .map(ChapterResponse::from)

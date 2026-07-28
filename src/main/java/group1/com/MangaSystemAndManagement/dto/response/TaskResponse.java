@@ -25,10 +25,14 @@ public class TaskResponse {
     private Long assigneeId;
     private String assigneeName;
     private List<SubTaskResponse> subTasks;
+    private Long chapterId;
 
     public static TaskResponse from(Task t) {
         TaskResponse r = new TaskResponse();
         r.id = t.getId();
+        if (t.getChapter() != null) {
+            r.chapterId = t.getChapter().getId();
+        }
         r.title = t.getTitle();
         r.productionTaskType = t.getProductionTaskType();
         r.taskWorkflowStatus = t.getTaskWorkflowStatus();

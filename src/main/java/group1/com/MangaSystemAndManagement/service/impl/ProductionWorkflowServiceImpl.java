@@ -2,6 +2,7 @@ package group1.com.MangaSystemAndManagement.service.impl;
 
 import group1.com.MangaSystemAndManagement.dto.request.*;
 import group1.com.MangaSystemAndManagement.dto.response.*;
+import group1.com.MangaSystemAndManagement.exception.WorkflowRuleViolationException;
 import group1.com.MangaSystemAndManagement.model.*;
 import group1.com.MangaSystemAndManagement.repository.*;
 import group1.com.MangaSystemAndManagement.service.interfaces.ProductionWorkflowService;
@@ -16,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -129,12 +129,13 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
             project.setProjectWorkflowStatus(ProjectWorkflowStatus.ACTIVE);
             project = projectRepository.save(project);
 
-            // Create empty ProductionPlan linked to Project
-            Optional<ProductionPlan> existingPlan = productionPlanRepository.findByProjectId(project.getId());
-            if (existingPlan.isEmpty()) {
+            // Create initial ProductionPlan if none exists
+            List<ProductionPlan> existingPlans = productionPlanRepository.findByProjectIdOrderByStartDateDesc(project.getId());
+            if (existingPlans.isEmpty()) {
                 ProductionPlan plan = new ProductionPlan();
                 plan.setProject(project);
-                plan.setPlanStatus(PlanStatus.IN_PROGRESS);
+                plan.setTitle(project.getTitle() + " - Initial Plan");
+                plan.setPlanStatus(PlanStatus.ACTIVE);
                 productionPlanRepository.save(plan);
             }
         }
@@ -230,11 +231,13 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         chapter.setPublishDate(req.getPublishDate());
         chapter.setStartDate(req.getStartDate());
         chapter.setEndDate(req.getEndDate());
-        chapter.setChapterStatus(ChapterStatus.BACKLOG);
+        chapter.setChapterStatus(req.getChapterStatus());
+        chapter.setDeadline(req.getDeadline());
+        chapter.setPriority(req.getPriority());
         chapter.setOwner(requester);
 
-        // Guard: PAUSED plan is already covered by assertPlanNotPaused above.
-        // BA V3 §1: pre-approval is gone — any plan with planStatus IN_PROGRESS can host chapters.
+// Guard: DRAFT/COMPLETED plans are already covered by assertPlanNotPaused above.
+// Technical Spec v2.1 §3.1: ACTIVE/EXTENDED/OVERDUE plans host chapter production.
 
         chapter = chapterRepository.save(chapter);
 
@@ -244,9 +247,21 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         response.setTitle(chapter.getTitle());
         response.setTargetPageCount(chapter.getTargetPageCount());
         response.setPublishDate(chapter.getPublishDate());
+        response.setStartDate(chapter.getStartDate());
+        response.setEndDate(chapter.getEndDate());
         response.setChapterStatus(chapter.getChapterStatus());
-//        response.setStartDate(chapter.getStartDate());
-//        response.setEndDate(chapter.getEndDate());
+        if (chapter.getOwner() != null) {
+            response.setOwnerId(chapter.getOwner().getId());
+            response.setOwnerName(chapter.getOwner().getFirstName() + " " + chapter.getOwner().getLastName());
+        }
+        if (chapter.getAssignee() != null) {
+            response.setAssigneeId(chapter.getAssignee().getId());
+            response.setAssigneeName(chapter.getAssignee().getFirstName() + " " + chapter.getAssignee().getLastName());
+        }
+        response.setProjectId(chapter.getProject().getId());
+        if (chapter.getProductionPlan() != null) {
+            response.setPlanId(chapter.getProductionPlan().getId());
+        }
 
         return response;
     }
@@ -357,22 +372,78 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
             throw new IllegalArgumentException("The assignee must be a Mangaka");
         }
 
-        // Set Chapter assignee/owner
-        chapter.setOwner(mangaka);
+        // Spec v2.1: Tantou creates chapter (owner); Tantou then assigns to a Mangaka (assignee).
+        // owner stays untouched on assign; only assignee is updated.
+        chapter.setAssignee(mangaka);
         chapterRepository.save(chapter);
-
-        // Auto-assign all tasks in this chapter to the Mangaka
-        List<Task> tasks = taskRepository.findByChapterId(chapterId);
-        for (Task task : tasks) {
-            task.setAssignee(mangaka);
-        }
-        taskRepository.saveAll(tasks);
 
         ChapterResponse response = new ChapterResponse();
         org.springframework.beans.BeanUtils.copyProperties(chapter, response);
         response.setProjectId(chapter.getProject().getId());
-        response.setOwnerId(mangaka.getId());
-        response.setOwnerName(mangaka.getFirstName() + " " + mangaka.getLastName());
+        response.setAssigneeId(mangaka.getId());
+        response.setAssigneeName(mangaka.getFirstName() + " " + mangaka.getLastName());
+        if (chapter.getOwner() != null) {
+            response.setOwnerId(chapter.getOwner().getId());
+            response.setOwnerName(chapter.getOwner().getFirstName() + " " + chapter.getOwner().getLastName());
+        }
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public TaskResponse createManualTask(Long chapterId, CreateManualTaskRequest req) {
+        Chapter chapter = chapterRepository.findById(chapterId)
+                .orElseThrow(() -> new RuntimeException("Chapter not found"));
+        Account requester = getAccount(req.getRequesterId());
+
+        if (!requester.hasRole(SystemRoleName.MANGAKA)) {
+            throw new AccessDeniedException("Only Mangaka can manually create Tasks");
+        }
+        if (chapter.getAssignee() == null) {
+            throw new AccessDeniedException("Chapter has no Mangaka assigned yet");
+        }
+        Long assigneeId = chapter.getAssignee().getId();
+        if (assigneeId == null || !assigneeId.equals(requester.getId())) {
+            throw new AccessDeniedException(
+                    "Only the Mangaka assigned to this chapter can create Tasks under it");
+        }
+
+        assertPlanNotPaused(chapter.getProductionPlan());
+
+        if (chapter.getChapterStatus() != ChapterStatus.IN_PRODUCTION) {
+            throw new WorkflowRuleViolationException(
+                    "Chapter must be IN_PRODUCTION to accept new Tasks (current: "
+                            + chapter.getChapterStatus() + ")");
+        }
+
+        if (req.getDeadlineDate() != null && chapter.getEndDate() != null
+                && req.getDeadlineDate().isAfter(chapter.getEndDate())) {
+            throw new IllegalArgumentException(
+                    "Task deadline (" + req.getDeadlineDate()
+                            + ") cannot be after Chapter end date (" + chapter.getEndDate() + ")");
+        }
+
+        Task task = new Task();
+        task.setChapter(chapter);
+        task.setTitle(req.getTitle());
+        task.setDescription(req.getDescription());
+        task.setAcceptanceCriteria(req.getAcceptanceCriteria());
+        task.setProductionTaskType(req.getProductionTaskType());
+        task.setTaskWorkflowStatus(TaskWorkflowStatus.TODO);
+        task.setAssignee(requester);
+        task.setDeadlineDate(req.getDeadlineDate());
+        task.setDeadlineTime(req.getDeadlineTime() != null ? req.getDeadlineTime() : java.time.LocalTime.of(23, 59));
+        task.setProgressPercentage(0);
+
+        task = taskRepository.save(task);
+
+        TaskResponse response = new TaskResponse();
+        org.springframework.beans.BeanUtils.copyProperties(task, response);
+        response.setChapterId(chapter.getId());
+        if (task.getAssignee() != null) {
+            response.setAssigneeId(task.getAssignee().getId());
+            response.setAssigneeName(task.getAssignee().getFirstName() + " " + task.getAssignee().getLastName());
+        }
         return response;
     }
 
@@ -462,20 +533,23 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
     }
 
     /**
-     * BA V3 §2.2: PAUSED plans block any chapter creation, task assignment, status update,
-     * or feedback submission. Read-only operations (dashboard, asset listing) are still allowed.
+     * Technical Spec v2.1 §3.1: ACTIVE/EXTENDED/OVERDUE plans allow chapter/task
+     * mutations. DRAFT (future plans) and COMPLETED (closed plans) block writes.
+     * OVERDUE is allowed so Tantou can still Extend/Complete it before re-closing.
      */
     private void assertPlanNotPaused(ProductionPlan plan) {
         if (plan != null) {
-            // Always re-fetch from DB to pick up the latest planStatus. Previous PAUSE/RESUME
-            // calls in the same HTTP request cycle may not have been flushed to DB yet.
             if (plan.getId() != null) {
                 plan = productionPlanRepository.findById(plan.getId()).orElse(plan);
             }
-            if (plan.getPlanStatus() == PlanStatus.PAUSED) {
+            PlanStatus status = plan.getPlanStatus();
+            if (status == PlanStatus.DRAFT) {
                 throw new IllegalStateException(
-                        "Production Plan " + plan.getId() + " is PAUSED. Submissions are frozen. "
-                                + "Resume the plan first.");
+                        "Production Plan " + plan.getId() + " is DRAFT. Plan chưa đến ngày bắt đầu.");
+            }
+            if (status == PlanStatus.COMPLETED) {
+                throw new IllegalStateException(
+                        "Production Plan " + plan.getId() + " is COMPLETED. Plan đã đóng.");
             }
             if (plan.getProject() != null
                     && plan.getProject().getProjectWorkflowStatus() == ProjectWorkflowStatus.CANCELLED) {
@@ -770,11 +844,11 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         chapter.setRecallReason(recallReason);
         chapter = chapterRepository.save(chapter);
 
-        // If Plan was COMPLETED, roll back to IN_PROGRESS.
+        // If Plan was COMPLETED, roll back to ACTIVE.
         if (chapter.getProductionPlan() != null) {
             ProductionPlan plan = chapter.getProductionPlan();
             if (plan.getPlanStatus() == PlanStatus.COMPLETED) {
-                plan.setPlanStatus(PlanStatus.IN_PROGRESS);
+                plan.setPlanStatus(PlanStatus.ACTIVE);
                 productionPlanRepository.save(plan);
             }
         }
@@ -784,8 +858,8 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
 
     /**
      * Decision Log 2026-07-27 §AI-04: endpoint mới để Tantou chọn 1 Task cụ thể và set sang
-     * REVISION_REQUIRED. Task chỉ chuyển nếu Chapter thuộc Plan = IN_PROGRESS (không phải
-     * PAUSED/CANCELLED).
+     * REVISION_REQUIRED. Task chỉ chuyển nếu Chapter thuộc Plan = ACTIVE/EXTENDED/OVERDUE
+     * (không phải DRAFT/COMPLETED).
      */
     @Override
     @Transactional
@@ -894,7 +968,7 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         if (chapter.getProductionPlan() != null) {
             ProductionPlan plan = chapter.getProductionPlan();
             if (plan.getPlanStatus() == PlanStatus.COMPLETED) {
-                plan.setPlanStatus(PlanStatus.IN_PROGRESS);
+                plan.setPlanStatus(PlanStatus.ACTIVE);
                 productionPlanRepository.save(plan);
             }
         }

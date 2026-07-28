@@ -60,7 +60,7 @@ class CommentServiceImplTest {
     void setUp() {
         plan = new ProductionPlan();
         TestSupportBase.setField(plan, "id", PLAN_ID);
-        plan.setPlanStatus(PlanStatus.IN_PROGRESS);
+        plan.setPlanStatus(PlanStatus.ACTIVE);
 
         chapter = new Chapter();
         TestSupportBase.setField(chapter, "id", CHAPTER_ID);
