@@ -375,6 +375,7 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         // Spec v2.1: Tantou creates chapter (owner); Tantou then assigns to a Mangaka (assignee).
         // owner stays untouched on assign; only assignee is updated.
         chapter.setAssignee(mangaka);
+        chapter.setChapterStatus(ChapterStatus.IN_PRODUCTION);
         chapterRepository.save(chapter);
 
         ChapterResponse response = new ChapterResponse();

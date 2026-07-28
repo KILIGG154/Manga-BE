@@ -59,7 +59,7 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
 
         validateDateOrder(request.getStartDate(), request.getEndDate(), request.getDeadlineDate(), request.getPublishDate());
-        validateMinDuration(request.getStartDate(), request.getEndDate());
+        validateMinDuration(request.getStartDate(), request.getDeadlineDate());
 
         String title = request.getTitle().trim();
         if (title.isEmpty()) {
@@ -73,9 +73,15 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
         ProductionPlan plan = new ProductionPlan();
         plan.setProject(project);
         plan.setTitle(title);
+        // Thứ tự mốc thời gian (Spec v2.1):
+        //   startDate    : ngày bắt đầu production
+        //   deadlineDate : hạn cuối production nộp bản thảo cho editorial
+        //   endDate      : ngày đóng Plan (sau khi editorial xử lý buffer)
+        //   publishDate  : ngày phát hành
+        // Ràng buộc: startDate <= deadlineDate < endDate <= publishDate
         plan.setStartDate(request.getStartDate());
-        plan.setEndDate(request.getEndDate());
         plan.setDeadlineDate(request.getDeadlineDate());
+        plan.setEndDate(request.getEndDate());
         plan.setPublishDate(request.getPublishDate());
         plan.setCreatedBy(requester.getId());
 //        plan.setPlanStatus(deriveInitialStatus(request.getStartDate(), LocalDate.now()));
@@ -101,6 +107,19 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
 
         if (!request.getNewEndDate().isAfter(plan.getEndDate())) {
             throw new IllegalArgumentException("Ngày kết thúc mới phải lớn hơn ngày kết thúc hiện tại");
+        }
+        // endDate <= publishDate : không được extend vượt quá ngày phát hành
+        if (plan.getPublishDate() != null && request.getNewEndDate().isAfter(plan.getPublishDate())) {
+            throw new IllegalArgumentException(
+                    "Ngày kết thúc mới (" + request.getNewEndDate()
+                            + ") phải <= publishDate (" + plan.getPublishDate() + ")");
+        }
+        // deadlineDate < endDate (strict) : end mới vẫn phải sau deadline ít nhất 1 ngày
+        if (plan.getDeadlineDate() != null && !plan.getDeadlineDate().isBefore(request.getNewEndDate())) {
+            throw new IllegalArgumentException(
+                    "Ngày kết thúc mới (" + request.getNewEndDate()
+                            + ") phải > deadlineDate (" + plan.getDeadlineDate()
+                            + ") để giữ buffer cho editorial");
         }
 
         PlanExtensionLog.ReasonCode reason;
@@ -226,24 +245,35 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
 
     private static void validateDateOrder(LocalDate start, LocalDate end, LocalDate deadline, LocalDate publish) {
         if (start == null || end == null || deadline == null || publish == null) {
-            throw new IllegalArgumentException("Start, End, Deadline và Publish date đều là bắt buộc");
+            throw new IllegalArgumentException("Start, Deadline, End và Publish date đều là bắt buộc");
         }
-        if (start.isAfter(end)) {
-            throw new IllegalArgumentException("Thứ tự mốc thời gian không hợp lệ: startDate phải <= endDate");
+        // startDate ≤ deadlineDate  : bắt đầu sản xuất trước hoặc đúng ngày deadline nộp bản thảo
+        if (start.isAfter(deadline)) {
+            throw new IllegalArgumentException(
+                    "Thứ tự mốc thời gian không hợp lệ: startDate phải <= deadlineDate");
         }
-        if (end.isAfter(deadline)) {
-            throw new IllegalArgumentException("Thứ tự mốc thời gian không hợp lệ: endDate phải <= deadlineDate");
+        // deadlineDate < endDate (strict): deadline là hạn production nộp bản thảo,
+        // cần ít nhất 1 ngày buffer để editorial xử lý trước khi đóng Plan
+        if (!deadline.isBefore(end)) {
+            throw new IllegalArgumentException(
+                    "Thứ tự mốc thời gian không hợp lệ: deadlineDate phải < endDate "
+                            + "(cần ít nhất 1 ngày buffer cho editorial)");
         }
-        if (deadline.isAfter(publish)) {
-            throw new IllegalArgumentException("Thứ tự mốc thời gian không hợp lệ: deadlineDate phải <= publishDate");
+        // endDate ≤ publishDate     : đóng Plan trước hoặc đúng ngày phát hành
+        if (end.isAfter(publish)) {
+            throw new IllegalArgumentException(
+                    "Thứ tự mốc thời gian không hợp lệ: endDate phải <= publishDate");
         }
     }
 
-    private static void validateMinDuration(LocalDate start, LocalDate end) {
-        long days = java.time.temporal.ChronoUnit.DAYS.between(start, end);
+    private static void validateMinDuration(LocalDate start, LocalDate deadline) {
+        // Khoảng sản xuất thực sự = startDate → deadlineDate (hạn nộp bản thảo).
+        // endDate nằm sau deadline là buffer cho editorial nên không tính vào duration.
+        long days = java.time.temporal.ChronoUnit.DAYS.between(start, deadline);
         if (days < MIN_DURATION_DAYS) {
             throw new IllegalArgumentException(
-                    "Thời lượng sản xuất của một Production Plan tối thiểu phải từ 20 ngày (3 tuần) trở lên");
+                    "Thời lượng sản xuất của một Production Plan tối thiểu phải từ 20 ngày (3 tuần) trở lên "
+                            + "(tính từ startDate đến deadlineDate)");
         }
     }
 
