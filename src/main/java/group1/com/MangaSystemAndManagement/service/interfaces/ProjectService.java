@@ -30,4 +30,12 @@ public interface ProjectService {
      * @param reason      why the project was cancelled (stored on the plan as a memo)
      */
     Project cancelProject(Long projectId, Long requesterId, String reason);
+
+    /**
+     * Find all projects assigned to a specific Tantō (editor-in-charge).
+     *
+     * @param tantouId the Account id of the Tantō
+     * @return list of projects where the Tantō is assigned
+     */
+    List<Project> findByTantouId(Long tantouId);
 }

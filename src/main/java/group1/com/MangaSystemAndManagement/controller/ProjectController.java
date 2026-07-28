@@ -123,4 +123,25 @@ public class ProjectController {
             return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
         }
     }
+
+    /**
+     * Get all projects assigned to a specific Tantō (editor-in-charge).
+     * Returns full project details including related owner, tantou, mangaka, and plans.
+     *
+     * @param tantouId the Account id of the Tantō
+     */
+    @GetMapping("/tantou/{tantouId}")
+    @PreAuthorize("hasAuthority('TANTOU_EDITOR') or hasAuthority('ADMIN')")
+    @Operation(summary = "Get all projects by Tantō editor ID")
+    public ResponseEntity<ResponseBase> findByTantouId(@PathVariable Long tantouId) {
+        try {
+            List<Project> result = service.findByTantouId(tantouId);
+            List<ProjectResponse> response = result.stream()
+                    .map(ProjectResponse::from)
+                    .toList();
+            return ResponseEntity.status(200).body(new ResponseBase(200, "Success", response));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
 }

@@ -174,4 +174,10 @@ public class ProjectServiceImpl implements ProjectService {
     private String normalizeTitle(String title) {
         return title == null ? null : title.trim();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Project> findByTantouId(Long tantouId) {
+        return repository.findByTantouId(tantouId);
+    }
 }
