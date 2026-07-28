@@ -3,6 +3,7 @@ package group1.com.MangaSystemAndManagement.repository;
 import group1.com.MangaSystemAndManagement.model.PlanStatus;
 import group1.com.MangaSystemAndManagement.model.ProductionPlan;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -22,4 +23,7 @@ public interface ProductionPlanRepository extends JpaRepository<ProductionPlan, 
     List<ProductionPlan> findByPlanStatusAndStartDateLessThanEqual(PlanStatus status, LocalDate date);
 
     List<ProductionPlan> findByPlanStatusInAndEndDateBefore(Collection<PlanStatus> statuses, LocalDate date);
+
+    @Query("select distinct p from ProductionPlan p left join fetch p.chapters")
+    List<ProductionPlan> findAllWithChapters();
 }

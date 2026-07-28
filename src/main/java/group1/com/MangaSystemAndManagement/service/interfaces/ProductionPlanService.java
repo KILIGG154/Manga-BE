@@ -33,5 +33,8 @@ public interface ProductionPlanService {
 
     List<ProductionPlan> getAllProductionPlans();
 
+    /** Returns all production plans with their chapters eagerly loaded (for list endpoints). */
+    List<ProductionPlan> getAllProductionPlansWithChapters();
+
     List<PlanExtensionLog> getExtensionLogs(Long planId);
 }

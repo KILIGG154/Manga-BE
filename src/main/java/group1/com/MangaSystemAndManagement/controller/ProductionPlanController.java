@@ -131,7 +131,7 @@ public class ProductionPlanController {
     @GetMapping("/production-plans")
     public ResponseEntity<ResponseBase> getAll() {
         try {
-            List<ProductionPlanResponse> body = service.getAllProductionPlans().stream()
+            List<ProductionPlanResponse> body = service.getAllProductionPlansWithChapters().stream()
                     .map(ProductionPlanResponse::from)
                     .collect(Collectors.toList());
             return ResponseEntity.ok(new ResponseBase(200, "Success", body));

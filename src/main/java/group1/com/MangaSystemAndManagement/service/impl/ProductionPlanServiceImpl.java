@@ -191,6 +191,23 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<ProductionPlan> getAllProductionPlansWithChapters() {
+        List<ProductionPlan> plans = productionPlanRepository.findAllWithChapters();
+        // Touch collection & nested tasks to ensure all lazy associations are
+        // initialized inside this transaction before DTO mapping outside the
+        // service boundary (Hibernate requires an open session for LAZY proxies).
+        plans.forEach(plan -> {
+            if (plan.getChapters() != null) {
+                plan.getChapters().forEach(ch -> {
+                    if (ch.getTasks() != null) ch.getTasks().size();
+                });
+            }
+        });
+        return plans;
+    }
+
+    @Override
     public List<PlanExtensionLog> getExtensionLogs(Long planId) {
         return planExtensionLogRepository.findByProductionPlanIdOrderByExtendedAtDesc(planId);
     }
