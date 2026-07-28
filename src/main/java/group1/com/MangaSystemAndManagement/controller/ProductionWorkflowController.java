@@ -266,6 +266,36 @@ public class ProductionWorkflowController {
     }
 
     /**
+     * GET /api/workflow/mangaka/{mangakaId}/chapters
+     * BA V3 §3.1 — list every chapter assigned to a specific Mangaka.
+     * RBAC: current authenticated user must hold one of
+     * MANGAKA / TANTOU_EDITOR / LEADER_BOARD / EDITORIAL_BOARD_MEMBER.
+     * Mangaka có thể xem của bất kỳ ai (không giới hạn self) để trao đổi
+     * công việc giữa các team.
+     *
+     * Auth: Spring Security — user identity comes from the JWT (no requesterId).
+     */
+    @GetMapping("/mangaka/{mangakaId}/chapters")
+    @Operation(
+        summary = "List chapters assigned to a Mangaka",
+        description = "Use case: Mangaka dashboard (\"My Chapters\"). Caller is identified " +
+                      "from JWT; accessible to MANGAKA, TANTOU_EDITOR, LEADER_BOARD, and " +
+                      "EDITORIAL_BOARD_MEMBER.")
+    public ResponseEntity<ResponseBase> getChaptersAssignedToMangaka(
+            @PathVariable Long mangakaId) {
+        try {
+            var chapters = workflowService.getChaptersAssignedToMangaka(mangakaId);
+            return ResponseEntity.ok(new ResponseBase(200, "Assigned chapters retrieved", chapters));
+        } catch (AccessDeniedException ad) {
+            return ResponseEntity.status(403).body(new ResponseBase(403, ad.getMessage(), null));
+        } catch (IllegalArgumentException ia) {
+            return ResponseEntity.status(400).body(new ResponseBase(400, ia.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
+
+    /**
      * POST /api/workflow/chapters/{chapterId}/publish
      * Allowed: LEADER_BOARD or EDITORIAL_BOARD_MEMBER (BA V3 §3.1).
      * Body: PublishChapterRequest { publishDate?, releaseNote? } — both OPTIONAL (§AI-01).

@@ -32,4 +32,7 @@ public interface ChapterRepository extends JpaRepository<Chapter, Long> {
 
     /** Technical Spec v2.1 §4.3 (BR-05): chapters of a plan that are NOT in the given status. */
     long countByProductionPlanIdAndChapterStatusNot(Long productionPlanId, ChapterStatus status);
+
+    /** BA V3 §3.1 — list chapters assigned to a specific Mangaka (for "My Chapters" view). */
+    List<Chapter> findByAssigneeId(Long assigneeId);
 }

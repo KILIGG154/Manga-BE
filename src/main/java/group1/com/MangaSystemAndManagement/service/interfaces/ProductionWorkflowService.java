@@ -47,6 +47,17 @@ public interface ProductionWorkflowService {
     List<ChapterResponse> getPublishableChapters(Long projectId, Long requesterId);
 
     /**
+     * BA V3 §3.1 — list chapters assigned to a specific Mangaka (for "My Chapters" view).
+     * Accessible by the Mangaka themselves (requesterId must match assigneeId) or by
+     * TANTOU_EDITOR / LEADER_BOARD / EDITORIAL_BOARD_MEMBER of the parent project.
+     */
+    /**
+     * List every chapter whose assignee is {@code assigneeId}.
+     * Caller is resolved from Spring Security (JWT).
+     */
+    List<ChapterResponse> getChaptersAssignedToMangaka(Long assigneeId);
+
+    /**
      * Leader publishes a chapter by setting its publishDate and transitioning status to PUBLISHED.
      * Allowed: LEADER_BOARD or EDITORIAL_BOARD_MEMBER (BA V3 §3.1).
      * Chapter must be COMPLETED. If publishDate is null, defaults to today.

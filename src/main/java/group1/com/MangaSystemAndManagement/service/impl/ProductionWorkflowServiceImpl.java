@@ -11,6 +11,9 @@ import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -724,6 +727,54 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
                 .stream()
                 .map(ChapterResponse::from)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ChapterResponse> getChaptersAssignedToMangaka(Long assigneeId) {
+        Account requester = currentAuthenticatedAccount();
+        // RBAC đơn giản: bất kỳ ai có role MANGAKA / TANTOU_EDITOR / Board đều xem được.
+        boolean allowed = requester.hasRole(SystemRoleName.MANGAKA)
+                || requester.hasRole(SystemRoleName.TANTOU_EDITOR)
+                || requester.hasRole(SystemRoleName.LEADER_BOARD)
+                || requester.hasRole(SystemRoleName.EDITORIAL_BOARD_MEMBER);
+        if (!allowed) {
+            throw new AccessDeniedException(
+                    "Only MANGAKA, Tantō, or Board can view assigned chapters");
+        }
+        // Verify assignee exists and is a Mangaka
+        Account assignee = getAccount(assigneeId);
+        if (!assignee.hasRole(SystemRoleName.MANGAKA)) {
+            throw new IllegalArgumentException(
+                    "Assignee is not a Mangaka: " + assigneeId);
+        }
+        return chapterRepository.findByAssigneeId(assigneeId).stream()
+                .map(ChapterResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Resolve the authenticated user from the JWT-backed SecurityContext.
+     * Returns the Account row whose email matches the JWT subject.
+     */
+    private Account currentAuthenticatedAccount() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            throw new AccessDeniedException("Authentication required");
+        }
+        Object principal = auth.getPrincipal();
+        String email;
+        if (principal instanceof UserDetails ud) {
+            email = ud.getUsername();
+        } else {
+            email = auth.getName();
+        }
+        if (email == null || email.isBlank()) {
+            throw new AccessDeniedException("Authenticated principal has no email");
+        }
+        final String normalizedEmail = email.trim().toLowerCase(java.util.Locale.ROOT);
+        return accountRepository.findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(() -> new AccessDeniedException(
+                        "Authenticated account was not found: " + normalizedEmail));
     }
 
     @Override

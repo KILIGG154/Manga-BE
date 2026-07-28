@@ -122,13 +122,9 @@ public class SubmissionServiceImpl implements SubmissionService {
         // ----- (g) Roll-up effect on the SubTask status
         if (hasSubTask) {
             SubTask subTask = s.getSubTask();
-            if (req.getSubmissionType() == SubmissionType.ROUGH_SKETCH) {
-                subTask.setSubtaskStatus(SubTaskWorkflowStatus.ROUGH_SUBMITTED);
-                subTaskRepository.save(subTask);
-            } else if (req.getSubmissionType() == SubmissionType.FINAL) {
-                subTask.setSubtaskStatus(SubTaskWorkflowStatus.FINAL_SUBMITTED);
-                subTaskRepository.save(subTask);
-            }
+            // Đơn giản hoá: mọi round mới → SubTask = IN_PROGRESS (chờ Mangaka review).
+            subTask.setSubtaskStatus(SubTaskWorkflowStatus.IN_PROGRESS);
+            subTaskRepository.save(subTask);
         }
         return SubmissionResponse.from(s);
     }
@@ -194,13 +190,9 @@ public class SubmissionServiceImpl implements SubmissionService {
         s = submissionRepository.save(s);
         s.setFiles(persistFiles(s, files, type));
 
-        if (type == SubmissionType.ROUGH_SKETCH) {
-            subTask.setSubtaskStatus(SubTaskWorkflowStatus.ROUGH_SUBMITTED);
-            subTaskRepository.save(subTask);
-        } else if (type == SubmissionType.FINAL) {
-            subTask.setSubtaskStatus(SubTaskWorkflowStatus.FINAL_SUBMITTED);
-            subTaskRepository.save(subTask);
-        }
+        // Đơn giản hoá: mọi round mới → SubTask = IN_PROGRESS (chờ Mangaka review).
+        subTask.setSubtaskStatus(SubTaskWorkflowStatus.IN_PROGRESS);
+        subTaskRepository.save(subTask);
         return SubmissionResponse.from(s);
     }
 
@@ -269,32 +261,12 @@ public class SubmissionServiceImpl implements SubmissionService {
                     "SubTask is already COMPLETED – re-open it before submitting again");
         }
 
-        // State Machine validation
-        SubTaskWorkflowStatus status = subTask.getSubtaskStatus();
-        if (type == SubmissionType.ROUGH_SKETCH) {
-            if (status != SubTaskWorkflowStatus.TODO 
-                    && status != SubTaskWorkflowStatus.IN_PROGRESS 
-                    && status != SubTaskWorkflowStatus.ROUGH_REJECTED) {
-                throw new WorkflowRuleViolationException(
-                        "ROUGH_SKETCH can only be submitted when SubTask is TODO, IN_PROGRESS, or ROUGH_REJECTED (current: " + status + ")");
-            }
-        } else if (type == SubmissionType.FINAL) {
-            if (status != SubTaskWorkflowStatus.ROUGH_APPROVED 
-                    && status != SubTaskWorkflowStatus.FINAL_REJECTED) {
-                throw new WorkflowRuleViolationException(
-                        "FINAL can only be submitted when SubTask is ROUGH_APPROVED or FINAL_REJECTED (current: " + status + ")");
-            }
-            
-            boolean hasApprovedRough = !submissionRepository
-                    .findLatestBySubTaskAndType(subTask.getId(), SubmissionType.ROUGH_SKETCH)
-                    .stream()
-                    .filter(x -> x.getProductionStatus() == group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.APPROVED)
-                    .toList()
-                    .isEmpty();
-            if (!hasApprovedRough) {
-                throw new WorkflowRuleViolationException(
-                        "FINAL submission requires at least one APPROVED ROUGH_SKETCH round");
-            }
+        // State Machine validation (đơn giản hoá – 1 vòng duy nhất)
+// Cho phép Assistant nộp ROUGH_SKETCH / REVISION / FINAL bất kỳ lúc nào,
+// miễn là SubTask chưa COMPLETED. Submission type giờ chỉ còn mang tính phân loại.
+        if (subTask.getSubtaskStatus() == SubTaskWorkflowStatus.COMPLETED) {
+            throw new WorkflowRuleViolationException(
+                    "SubTask is already COMPLETED – cannot submit again");
         }
     }
 
@@ -341,32 +313,12 @@ public class SubmissionServiceImpl implements SubmissionService {
                     "TASK_LEVEL is not valid for a SubTask submission");
         }
 
-        // State Machine validation
-        SubTaskWorkflowStatus status = subTask.getSubtaskStatus();
-        if (type == SubmissionType.ROUGH_SKETCH) {
-            if (status != SubTaskWorkflowStatus.TODO 
-                    && status != SubTaskWorkflowStatus.IN_PROGRESS 
-                    && status != SubTaskWorkflowStatus.ROUGH_REJECTED) {
-                throw new WorkflowRuleViolationException(
-                        "ROUGH_SKETCH can only be submitted when SubTask is TODO, IN_PROGRESS, or ROUGH_REJECTED (current: " + status + ")");
-            }
-        } else if (type == SubmissionType.FINAL) {
-            if (status != SubTaskWorkflowStatus.ROUGH_APPROVED 
-                    && status != SubTaskWorkflowStatus.FINAL_REJECTED) {
-                throw new WorkflowRuleViolationException(
-                        "FINAL can only be submitted when SubTask is ROUGH_APPROVED or FINAL_REJECTED (current: " + status + ")");
-            }
-            
-            boolean hasApprovedRough = !submissionRepository
-                    .findLatestBySubTaskAndType(subTask.getId(), SubmissionType.ROUGH_SKETCH)
-                    .stream()
-                    .filter(x -> x.getProductionStatus() == group1.com.MangaSystemAndManagement.model.ProductionSubmissionStatus.APPROVED)
-                    .toList()
-                    .isEmpty();
-            if (!hasApprovedRough) {
-                throw new WorkflowRuleViolationException(
-                        "FINAL submission requires at least one APPROVED ROUGH_SKETCH round");
-            }
+        // State Machine validation (đơn giản hoá – 1 vòng duy nhất)
+// Cho phép Assistant nộp ROUGH_SKETCH / REVISION / FINAL bất kỳ lúc nào,
+// miễn là SubTask chưa COMPLETED. Submission type giờ chỉ còn mang tính phân loại.
+        if (subTask.getSubtaskStatus() == SubTaskWorkflowStatus.COMPLETED) {
+            throw new WorkflowRuleViolationException(
+                    "SubTask is already COMPLETED – cannot submit again");
         }
     }
 
@@ -509,25 +461,20 @@ public class SubmissionServiceImpl implements SubmissionService {
     }
 
     private void cascadeSubTaskReview(Submission s) {
+        // Spec v2.1 (đơn giản hoá): mỗi SubTask round do Mangaka review.
+        //   APPROVED → SubTask = COMPLETED, Mangaka có thể nộp TASK_LEVEL ngay.
+        //   REJECTED → SubTask quay về IN_PROGRESS, Assistant sửa rồi nộp lại.
+        // (Bỏ stage rough/final 2 vòng – vì nhu cầu thực tế chỉ cần 1 vòng duy nhất.)
         SubTask sub = s.getSubTask();
         switch (s.getProductionStatus()) {
             case APPROVED -> {
-                if (s.getSubmissionType() == SubmissionType.FINAL) {
-                    sub.setSubtaskStatus(SubTaskWorkflowStatus.COMPLETED);
-                    subTaskRepository.save(sub);
-                    // Roll-up Task + Plan
-                    recomputeTaskProgress(sub.getTask().getId());
-                } else {
-                    sub.setSubtaskStatus(SubTaskWorkflowStatus.ROUGH_APPROVED);
-                    subTaskRepository.save(sub);
-                }
+                sub.setSubtaskStatus(SubTaskWorkflowStatus.COMPLETED);
+                subTaskRepository.save(sub);
+                // Roll-up Task + Plan
+                recomputeTaskProgress(sub.getTask().getId());
             }
             case REJECTED -> {
-                if (s.getSubmissionType() == SubmissionType.FINAL) {
-                    sub.setSubtaskStatus(SubTaskWorkflowStatus.FINAL_REJECTED);
-                } else {
-                    sub.setSubtaskStatus(SubTaskWorkflowStatus.ROUGH_REJECTED);
-                }
+                sub.setSubtaskStatus(SubTaskWorkflowStatus.IN_PROGRESS);
                 subTaskRepository.save(sub);
             }
             default -> { /* no-op */ }
