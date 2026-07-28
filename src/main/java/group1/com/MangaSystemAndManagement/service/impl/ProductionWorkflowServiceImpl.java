@@ -54,7 +54,7 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
         project.setTargetAudience(req.getTargetAudience());
         project.setFormat(req.getFormat());
         project.setProjectWorkflowStatus(ProjectWorkflowStatus.ACTIVE); // Auto active
-        project.setOwner(tantou); // Tantou is assigned as the owner of the project
+        project.setTantou(tantou); // Tantou is assigned as the tantou of the project
 
         project = projectRepository.save(project);
 
@@ -78,7 +78,7 @@ public class ProductionWorkflowServiceImpl implements ProductionWorkflowService 
             if (!tantou.hasRole(SystemRoleName.TANTOU_EDITOR)) {
                 throw new IllegalArgumentException("Assigned account must have the TANTOU_EDITOR role");
             }
-            project.setOwner(tantou);
+            project.setTantou(tantou);
         }
 
         project = projectRepository.save(project);
