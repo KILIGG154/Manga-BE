@@ -64,4 +64,43 @@ public class ChapterController {
             return ResponseEntity.status(409).body(new ResponseBase(409, e.getMessage(), null));
         }
     }
+    @PutMapping("/{id}/update-overdue")
+    public ResponseEntity<ResponseBase> updateOverdueStatus(@PathVariable Long id) {
+        try {
+            Chapter result = service.updateOverdueStatus(id);
+            return ResponseEntity.status(200).body(new ResponseBase(200, "Updated overdue status successfully", result));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
+    @PutMapping("/{id}/completed")
+    public ResponseEntity<ResponseBase> updateStatusCompleted(@PathVariable Long id) {
+        try {
+            Chapter result = service.updateStatusCompleted(id);
+            return ResponseEntity.status(200).body(new ResponseBase(200, "Updated status to COMPLETED successfully", result));
+        } catch (Exception e) {
+            return ResponseEntity.status(409).body(new ResponseBase(409, e.getMessage(), null));
+        }
+    }
+    @PutMapping("/publish-by-plan/{planId}")
+    public ResponseEntity<ResponseBase> publishChaptersByPlanId(@PathVariable Long planId) {
+        try {
+            service.publishChaptersByPlanId(planId);
+            return ResponseEntity.status(200).body(new ResponseBase(200, "Published eligible chapters successfully", null));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
+    @GetMapping("/published")
+    public ResponseEntity<ResponseBase> getPublishedChapters() {
+        try {
+            List<Chapter> result = service.findPublishedChapters();
+            List<ChapterResponse> response = result.stream()
+                    .map(ChapterResponse::from)
+                    .toList();
+            return ResponseEntity.status(200).body(new ResponseBase(200, "Success", response));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
 }

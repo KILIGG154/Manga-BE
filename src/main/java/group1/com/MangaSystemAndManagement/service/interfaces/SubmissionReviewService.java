@@ -8,6 +8,8 @@ public interface SubmissionReviewService {
     SubmissionReview create(SubmissionReviewRequest request);
     Optional<SubmissionReviewResponse> findById(Long id);
     List<SubmissionReviewResponse> findAll();
+    List<SubmissionReviewResponse> findBySubmissionId(Long submissionId);
+    List<SubmissionReviewResponse> findByTaskIdAndReviewerId(Long taskId, Long tantouId);
     SubmissionReview update(Long id, SubmissionReviewRequest request);
     void delete(Long id);
 }

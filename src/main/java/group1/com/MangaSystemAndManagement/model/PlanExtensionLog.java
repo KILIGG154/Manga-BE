@@ -22,7 +22,8 @@ public class PlanExtensionLog {
         CLIENT_CHANGE,
         RESOURCE_SHORTAGE,
         TECHNICAL_ISSUE,
-        OTHER
+        OTHER,
+        DELAY_DEADLINE
     }
 
     @Id

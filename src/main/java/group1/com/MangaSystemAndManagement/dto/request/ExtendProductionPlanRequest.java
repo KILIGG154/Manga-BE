@@ -20,4 +20,6 @@ public class ExtendProductionPlanRequest {
     private String reasonCode;
 
     private String reasonNote;
+
+    private LocalDate publishDate;
 }

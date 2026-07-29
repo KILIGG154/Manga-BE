@@ -33,6 +33,17 @@ public class SubmissionReviewController {
             return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
         }
     }
+
+    @GetMapping("/tasks/{taskId}/tantous/{tantouId}")
+    public ResponseEntity<ResponseBase> findByTaskAndTantou(@PathVariable Long taskId, @PathVariable Long tantouId) {
+        try {
+            List<SubmissionReviewResponse> result = service.findByTaskIdAndReviewerId(taskId, tantouId);
+            return ResponseEntity.status(200).body(new ResponseBase(200, "Success", result));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ResponseBase> findById(@PathVariable Long id) {
         try {

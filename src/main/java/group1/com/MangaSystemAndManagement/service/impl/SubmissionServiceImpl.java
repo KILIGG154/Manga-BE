@@ -21,6 +21,7 @@ import group1.com.MangaSystemAndManagement.repository.TaskRepository;
 import group1.com.MangaSystemAndManagement.repository.ChapterRepository;
 import group1.com.MangaSystemAndManagement.repository.ProductionPlanRepository;
 import group1.com.MangaSystemAndManagement.repository.ProjectRepository;
+import group1.com.MangaSystemAndManagement.repository.SubmissionReviewRepository;
 import group1.com.MangaSystemAndManagement.service.interfaces.SubmissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -53,6 +54,7 @@ public class SubmissionServiceImpl implements SubmissionService {
     private final ChapterRepository chapterRepository;
     private final ProductionPlanRepository productionPlanRepository;
     private final ProjectRepository projectRepository;
+    private final SubmissionReviewRepository submissionReviewRepository;
     private final StorageProperties storageProperties;
 
     // =====================================================================
@@ -450,6 +452,15 @@ public class SubmissionServiceImpl implements SubmissionService {
             s.setContentUrl(req.getNote()); // overwrite – "note" replaces the prior content
         }
         s = submissionRepository.save(s);
+
+        // Create the historical review record
+        group1.com.MangaSystemAndManagement.model.SubmissionReview reviewRecord = new group1.com.MangaSystemAndManagement.model.SubmissionReview();
+        reviewRecord.setSubmission(s);
+        reviewRecord.setReviewer(reviewer);
+        reviewRecord.setDecision(req.getDecision().name());
+        reviewRecord.setComment(req.getNote());
+        reviewRecord.setReviewedAt(Instant.now());
+        submissionReviewRepository.save(reviewRecord);
 
         // ----- (e) Cascade effects
         if (s.getSubTask() != null) {

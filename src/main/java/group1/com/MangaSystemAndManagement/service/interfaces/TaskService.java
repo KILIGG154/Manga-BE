@@ -7,6 +7,7 @@ public interface TaskService {
     Task create(TaskRequest request);
     Optional<Task> findById(Long id);
     List<Task> findAll();
+    List<Task> findByAssigneeId(Long assigneeId);
     Task update(Long id, TaskRequest request);
     void delete(Long id);
 }

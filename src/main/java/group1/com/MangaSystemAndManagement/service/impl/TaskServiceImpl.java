@@ -27,6 +27,29 @@ public class TaskServiceImpl implements TaskService {
     public List<Task> findAll() {
         return repository.findAll();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Task> findByAssigneeId(Long assigneeId) {
+        List<Task> tasks = repository.findByAssigneeId(assigneeId);
+        tasks.forEach(task -> {
+            if (task.getSubTasks() != null) {
+                task.getSubTasks().size();
+                task.getSubTasks().forEach(subTask -> {
+                    if (subTask.getSubmissions() != null) {
+                        subTask.getSubmissions().size();
+                        subTask.getSubmissions().forEach(sub -> {
+                            if (sub.getFiles() != null) {
+                                sub.getFiles().size();
+                            }
+                        });
+                    }
+                });
+            }
+        });
+        return tasks;
+    }
+
     @Override
     @Transactional
     public Task update(Long id, TaskRequest request) {

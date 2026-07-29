@@ -77,6 +77,9 @@ public class Task {
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
     private java.util.List<SubTask> subTasks;
 
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.List<Submission> submissions;
+
     /** Deadline date for this task (must not exceed the parent Chapter's endDate). */
     @Column(name = "deadline_date")
     private LocalDate deadlineDate;

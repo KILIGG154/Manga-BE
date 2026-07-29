@@ -8,5 +8,9 @@ public interface ChapterService {
     Optional<Chapter> findById(Long id);
     List<Chapter> findAll();
     Chapter update(Long id, ChapterRequest request);
+    Chapter updateOverdueStatus(Long id);
+    Chapter updateStatusCompleted(Long id);
+    void publishChaptersByPlanId(Long planId);
+    List<Chapter> findPublishedChapters();
     void delete(Long id);
 }

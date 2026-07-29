@@ -37,6 +37,69 @@ public class ChapterServiceImpl implements ChapterService {
     }
     @Override
     @Transactional
+    public Chapter updateOverdueStatus(Long id) {
+        Chapter chapter = repository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Chapter not found with id " + id));
+            
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.Instant now = java.time.Instant.now();
+        
+        // If today < deadline date, do not change anything
+        if (chapter.getDeadline() != null && now.isBefore(chapter.getDeadline())) {
+            return chapter;
+        }
+        
+        if (chapter.getChapterStatus() != group1.com.MangaSystemAndManagement.model.ChapterStatus.COMPLETED &&
+            chapter.getChapterStatus() != group1.com.MangaSystemAndManagement.model.ChapterStatus.PUBLISHED &&
+            chapter.getChapterStatus() != group1.com.MangaSystemAndManagement.model.ChapterStatus.SCHEDULED &&
+            chapter.getChapterStatus() != group1.com.MangaSystemAndManagement.model.ChapterStatus.OVERDUE) {
+            
+            boolean isOverdue = false;
+            if (chapter.getEndDate() != null && today.isAfter(chapter.getEndDate())) {
+                isOverdue = true;
+            } else if (chapter.getDeadline() != null && now.isAfter(chapter.getDeadline())) {
+                isOverdue = true;
+            }
+            
+            if (isOverdue) {
+                chapter.setChapterStatus(group1.com.MangaSystemAndManagement.model.ChapterStatus.OVERDUE);
+                return repository.save(chapter);
+            }
+        }
+        return chapter;
+    }
+    @Override
+    @Transactional
+    public Chapter updateStatusCompleted(Long id) {
+        Chapter entity = repository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Chapter not found with id " + id));
+        entity.setChapterStatus(group1.com.MangaSystemAndManagement.model.ChapterStatus.COMPLETED);
+        return repository.save(entity);
+    }
+    @Override
+    @Transactional
+    public void publishChaptersByPlanId(Long planId) {
+        List<Chapter> chapters = repository.findByProductionPlanId(planId);
+        java.time.LocalDate today = java.time.LocalDate.now();
+        for (Chapter chapter : chapters) {
+            if (chapter.getChapterStatus() == group1.com.MangaSystemAndManagement.model.ChapterStatus.COMPLETED) {
+                java.time.LocalDate publishDate = chapter.getPublishDate();
+                if (publishDate == null && chapter.getProductionPlan() != null) {
+                    publishDate = chapter.getProductionPlan().getPublishDate();
+                }
+                if (publishDate != null && publishDate.equals(today)) {
+                    chapter.setChapterStatus(group1.com.MangaSystemAndManagement.model.ChapterStatus.PUBLISHED);
+                    repository.save(chapter);
+                }
+            }
+        }
+    }
+    @Override
+    public List<Chapter> findPublishedChapters() {
+        return repository.findByChapterStatus(group1.com.MangaSystemAndManagement.model.ChapterStatus.PUBLISHED);
+    }
+    @Override
+    @Transactional
     public void delete(Long id) {
         if (!repository.existsById(id)) {
             throw new RuntimeException("Chapter not found with id " + id);

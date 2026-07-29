@@ -25,6 +25,7 @@ public class TaskResponse {
     private Long assigneeId;
     private String assigneeName;
     private List<SubTaskResponse> subTasks;
+    private List<SubmissionResponse> submissions;
     private Long chapterId;
 
     public static TaskResponse from(Task t) {
@@ -46,6 +47,11 @@ public class TaskResponse {
         if (t.getSubTasks() != null) {
             r.subTasks = t.getSubTasks().stream()
                     .map(SubTaskResponse::from)
+                    .collect(Collectors.toList());
+        }
+        if (t.getSubmissions() != null) {
+            r.submissions = t.getSubmissions().stream()
+                    .map(SubmissionResponse::from)
                     .collect(Collectors.toList());
         }
         return r;

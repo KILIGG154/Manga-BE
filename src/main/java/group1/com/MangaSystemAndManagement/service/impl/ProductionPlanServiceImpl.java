@@ -108,11 +108,14 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
         if (!request.getNewEndDate().isAfter(plan.getEndDate())) {
             throw new IllegalArgumentException("Ngày kết thúc mới phải lớn hơn ngày kết thúc hiện tại");
         }
+
+        LocalDate effectivePublishDate = request.getPublishDate() != null ? request.getPublishDate() : plan.getPublishDate();
+
         // endDate <= publishDate : không được extend vượt quá ngày phát hành
-        if (plan.getPublishDate() != null && request.getNewEndDate().isAfter(plan.getPublishDate())) {
+        if (effectivePublishDate != null && request.getNewEndDate().isAfter(effectivePublishDate)) {
             throw new IllegalArgumentException(
                     "Ngày kết thúc mới (" + request.getNewEndDate()
-                            + ") phải <= publishDate (" + plan.getPublishDate() + ")");
+                            + ") phải <= publishDate (" + effectivePublishDate + ")");
         }
         // deadlineDate < endDate (strict) : end mới vẫn phải sau deadline ít nhất 1 ngày
         if (plan.getDeadlineDate() != null && !plan.getDeadlineDate().isBefore(request.getNewEndDate())) {
@@ -132,6 +135,9 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
 
         LocalDate oldEndDate = plan.getEndDate();
         plan.setEndDate(request.getNewEndDate());
+        if (request.getPublishDate() != null) {
+            plan.setPublishDate(request.getPublishDate());
+        }
         plan.setPlanStatus(PlanStatus.EXTENDED);
         productionPlanRepository.save(plan);
 
@@ -201,8 +207,22 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ProductionPlan> getProductionPlansByProject(Long projectId) {
-        return productionPlanRepository.findByProjectIdOrderByStartDateDesc(projectId);
+        List<ProductionPlan> plans = productionPlanRepository.findByProjectIdOrderByStartDateDesc(projectId);
+        plans.forEach(plan -> {
+            if (plan.getChapters() != null) {
+                plan.getChapters().forEach(ch -> {
+                    if (ch.getTasks() != null) {
+                        ch.getTasks().forEach(t -> {
+                            if (t.getSubmissions() != null) t.getSubmissions().size();
+                            if (t.getSubTasks() != null) t.getSubTasks().size();
+                        });
+                    }
+                });
+            }
+        });
+        return plans;
     }
 
     @Override

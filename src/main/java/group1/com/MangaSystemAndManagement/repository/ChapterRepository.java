@@ -11,6 +11,8 @@ import java.util.List;
 @Repository
 public interface ChapterRepository extends JpaRepository<Chapter, Long> {
 
+    List<Chapter> findByChapterStatus(ChapterStatus status);
+
     List<Chapter> findByProductionPlanId(Long productionPlanId);
 
     List<Chapter> findByProjectId(Long projectId);

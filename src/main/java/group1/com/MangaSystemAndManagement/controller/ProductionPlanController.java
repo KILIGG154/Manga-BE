@@ -100,7 +100,7 @@ public class ProductionPlanController {
     }
 
     /** Spec v2.1 §4.3 — complete a Plan once 100% of its chapters are PUBLISHED. */
-    @PostMapping("/production-plans/{planId}/complete")
+    @PutMapping("/production-plans/{planId}/complete")
     public ResponseEntity<ResponseBase> complete(
             @PathVariable Long planId,
             @RequestParam Long requesterId) {

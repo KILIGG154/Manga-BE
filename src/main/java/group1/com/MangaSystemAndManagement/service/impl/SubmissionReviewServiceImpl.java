@@ -50,6 +50,20 @@ public class SubmissionReviewServiceImpl implements SubmissionReviewService {
     }
 
     @Override
+    public List<SubmissionReviewResponse> findBySubmissionId(Long submissionId) {
+        return repository.findBySubmissionId(submissionId).stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<SubmissionReviewResponse> findByTaskIdAndReviewerId(Long taskId, Long tantouId) {
+        return repository.findBySubmissionTaskIdAndReviewerId(taskId, tantouId).stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional
     public SubmissionReview update(Long id, SubmissionReviewRequest request) {
         SubmissionReview entity = repository.findById(id)

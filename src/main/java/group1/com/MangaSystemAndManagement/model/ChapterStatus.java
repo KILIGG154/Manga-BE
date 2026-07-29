@@ -17,5 +17,6 @@ public enum ChapterStatus {
     COMPLETED,
     COMPLETED_NEEDS_REVIEW,
     SCHEDULED,
-    PUBLISHED
+    PUBLISHED,
+    OVERDUE
 }

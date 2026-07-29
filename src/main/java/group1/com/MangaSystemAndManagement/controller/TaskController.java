@@ -32,6 +32,17 @@ public class TaskController {
             return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
         }
     }
+
+    @GetMapping("/mangaka/{mangakaId}")
+    public ResponseEntity<ResponseBase> getTasksByMangakaId(@PathVariable Long mangakaId) {
+        try {
+            List<Task> result = service.findByAssigneeId(mangakaId);
+            return ResponseEntity.status(200).body(new ResponseBase(200, "Success", result));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new ResponseBase(500, e.getMessage(), null));
+        }
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ResponseBase> findById(@PathVariable Long id) {
         try {
